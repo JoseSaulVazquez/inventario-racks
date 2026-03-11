@@ -32,6 +32,7 @@ function ComponenteView() {
     : null
 
   const ipActual = componente ? getIpComponente(componente.id) : "192.168.0.31"
+  const esSwitch = componente?.nombre.toLowerCase().includes("switch")
 
   const iniciarEdicionIp = () => {
     setIpLocal(ipActual)
@@ -171,12 +172,14 @@ function ComponenteView() {
                     {puertoDetalle.nombre || "—"}
                   </td>
                 </tr>
-                <tr>
-                  <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">IP</td>
-                  <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                    {ipActual}
-                  </td>
-                </tr>
+                {esSwitch && (
+                  <tr>
+                    <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">IP</td>
+                    <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                      {ipActual}
+                    </td>
+                  </tr>
+                )}
                 <tr>
                   <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Notas</td>
                   <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">

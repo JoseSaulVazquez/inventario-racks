@@ -14,6 +14,7 @@ function PuertoView() {
   const navigate = useNavigate()
   const { puertos, updatePuerto, getIpComponente } = useInventario()
   const [guardado, setGuardado] = useState(false)
+  const [mensajeModal, setMensajeModal] = useState("")
 
   const puerto = puertos.find((p) => p.id === Number(puertoId))
   const componente = puerto ? componentes.find((c) => c.id === puerto.componenteId) : null
@@ -78,9 +79,26 @@ function PuertoView() {
   }
 
   const ipComponente = componente ? getIpComponente(componente.id) : ""
+  const esSwitch = componente?.nombre.toLowerCase().includes("switch")
 
   return (
-    <div className="min-h-screen bg-white p-4 sm:p-6 lg:p-8">
+    <>
+      {guardado && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center">
+            <p className="text-gray-800 mb-4">{mensajeModal || "Los datos fueron guardados correctamente"}</p>
+            <button
+              type="button"
+              onClick={() => setGuardado(false)}
+              className="px-6 py-2 bg-[#1e3a5f] hover:bg-[#2d4a73] text-white font-medium rounded"
+            >
+              Aceptar
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="min-h-screen bg-white p-4 sm:p-6 lg:p-8">
       <div className="mb-4 sm:mb-6 flex items-center gap-2 sm:gap-4 flex-wrap">
         <button
           type="button"
@@ -107,9 +125,6 @@ function PuertoView() {
         <form onSubmit={handleSubmit} className="border border-gray-200 rounded-lg overflow-hidden">
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <h2 className="text-base sm:text-lg font-semibold text-[#1e3a5f]">Editar información del puerto</h2>
-            {guardado && (
-              <span className="text-sm text-green-600">Guardado correctamente</span>
-            )}
           </div>
           <div className="p-4 sm:p-6 space-y-4">
             <div>
@@ -236,15 +251,17 @@ function PuertoView() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">IP</label>
-              <input
-                type="text"
-                value={ipComponente}
-                disabled
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 bg-gray-100 cursor-not-allowed"
-              />
-            </div>
+            {esSwitch && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">IP</label>
+                <input
+                  type="text"
+                  value={ipComponente}
+                  disabled
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 bg-gray-100 cursor-not-allowed"
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
@@ -258,18 +275,63 @@ function PuertoView() {
               />
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!puerto) return
+                  updatePuerto(puerto.id, {
+                    estado: form.estado,
+                    conector: form.conector,
+                    numeroPanel: form.numeroPanel,
+                    puertoPanel: form.puertoPanel,
+                    numeroSwitch: form.numeroSwitch,
+                    puertoSwitch: form.puertoSwitch,
+                    equipoConectado: form.equipoConectado,
+                    nombre: form.nombre,
+                    notas: form.notas,
+                  })
+                  setMensajeModal("Los datos del puerto fueron actualizados correctamente")
+                  setGuardado(true)
+                }}
+                className="w-full sm:w-auto px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition"
+              >
+                Actualizar
+              </button>
               <button
                 type="submit"
-                className="w-full sm:w-auto px-6 py-2.5 bg-[#1e3a5f] hover:bg-[#2d4a73] text-white font-medium rounded-lg transition"
+                className="w-full sm:w-auto px-4 py-2.5 bg-[#1e3a5f] hover:bg-[#2d4a73] text-white font-medium rounded-lg transition"
               >
-                Guardar cambios
+                Guardar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!puerto) return
+                  updatePuerto(puerto.id, {
+                    estado: "libre",
+                    conector: "",
+                    numeroPanel: "",
+                    puertoPanel: "",
+                    numeroSwitch: "",
+                    puertoSwitch: "",
+                    equipoConectado: "",
+                    nombre: "",
+                    notas: "",
+                  })
+                  setMensajeModal("El puerto fue eliminado correctamente")
+                  setGuardado(true)
+                }}
+                className="w-full sm:w-auto px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition"
+              >
+                Eliminar Puerto
               </button>
             </div>
           </div>
         </form>
       </div>
     </div>
+    </>
   )
 }
 
