@@ -18,15 +18,15 @@ export const pisosOficinas = [
 
 // Áreas: 1-4 Oficinas, 5 Casetas, 6 Comedor, 7 Hotel, 8 Planta, 9 Mantenimiento
 export const areas = [
-  { id: 1, nombre: "Planta baja" },
-  { id: 2, nombre: "Primera Planta" },
-  { id: 3, nombre: "Segunda Planta" },
-  { id: 4, nombre: "Tercera Planta" },
-  { id: 5, nombre: "Casetas" },
-  { id: 6, nombre: "Comedor" },
-  { id: 7, nombre: "Hotel" },
+  { id: 1, nombre: "Planta baja", codigoBd: "PB" },
+  { id: 2, nombre: "Primera Planta", codigoBd: "P1" },
+  { id: 3, nombre: "Segunda Planta", codigoBd: "P2" },
+  { id: 4, nombre: "Tercera Planta", codigoBd: "P3" },
+  { id: 5, nombre: "Casetas", codigoBd: "Caseta" },
+  { id: 6, nombre: "Comedor", codigoBd: "Comedor" },
+  { id: 7, nombre: "Hotel", codigoBd: "Dormitorios" },
   { id: 8, nombre: "Planta" },
-  { id: 9, nombre: "Mantenimiento" },
+  { id: 9, nombre: "Mantenimiento", codigoBd: "Mantenimiento" },
 ]
 
 // Ubicaciones que van directo a un rack (solo 1 rack en esa área)
@@ -217,6 +217,42 @@ export function getRacksByAreaId(areaId) {
 
 export function getComponentesByRackId(rackId) {
   return componentes.filter((c) => c.rackId === Number(rackId))
+}
+
+// Número de switch dentro del rack (1..n) ordenado de arriba hacia abajo
+export function getNumeroSwitchEnRack(componenteId) {
+  const comp = componentes.find((c) => c.id === Number(componenteId))
+  if (!comp) return null
+  if (!String(comp.nombre).toLowerCase().includes("switch")) return null
+
+  const switchesDelRack = componentes
+    .filter(
+      (c) =>
+        c.rackId === comp.rackId &&
+        String(c.nombre).toLowerCase().includes("switch")
+    )
+    .sort((a, b) => b.posicionInicio - a.posicionInicio)
+
+  const idx = switchesDelRack.findIndex((c) => c.id === comp.id)
+  return idx === -1 ? null : idx + 1
+}
+
+// Número de panel dentro del rack (1..n) ordenado de arriba hacia abajo
+export function getNumeroPanelEnRack(componenteId) {
+  const comp = componentes.find((c) => c.id === Number(componenteId))
+  if (!comp) return null
+  if (!String(comp.nombre).toLowerCase().includes("patch panel")) return null
+
+  const panelsDelRack = componentes
+    .filter(
+      (c) =>
+        c.rackId === comp.rackId &&
+        String(c.nombre).toLowerCase().includes("patch panel")
+    )
+    .sort((a, b) => b.posicionInicio - a.posicionInicio)
+
+  const idx = panelsDelRack.findIndex((c) => c.id === comp.id)
+  return idx === -1 ? null : idx + 1
 }
 
 export function getPuertosByComponenteId(puertos, componenteId) {
