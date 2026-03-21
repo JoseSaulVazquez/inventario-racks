@@ -3,6 +3,7 @@ import { InventarioProvider } from "./context/InventarioContext"
 import Navbar from "./components/Navbar"
 import Home from "./pages/Home"
 import OficinasPisos from "./pages/OficinasPisos"
+import CasetasRacks from "./pages/CasetasRacks"
 import Racks from "./pages/Racks"
 import RackView from "./pages/RackView"
 import ComponenteView from "./pages/ComponenteView"
@@ -12,7 +13,7 @@ import Login from "./pages/Login"
 
 function RequireAuth({ children }) {
   const location = useLocation()
-  const authed = !!localStorage.getItem("auth-ok")
+  const authed = !!localStorage.getItem("auth-token")
 
   if (!authed) {
     return <Navigate to="/login" replace state={{ from: location }} />
@@ -51,6 +52,14 @@ function App() {
           element={
             <RequireAuth>
               <OficinasPisos />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/casetas"
+          element={
+            <RequireAuth>
+              <CasetasRacks />
             </RequireAuth>
           }
         />

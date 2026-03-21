@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { componentes, racks, areas, getPuertosByComponenteId } from "../data/mockData"
+import { racks, areas, getPuertosByComponenteId } from "../data/mockData"
+import { findComponenteById } from "../utils/rackMerge"
 import { useInventario } from "../context/InventarioContext"
 
 function claseColorPorEstado(estado, isSelected) {
@@ -17,12 +18,17 @@ function claseColorPorEstado(estado, isSelected) {
 function ComponenteView() {
   const { componenteId } = useParams()
   const navigate = useNavigate()
-  const { puertos, getIpComponente, updateIpComponente } = useInventario()
+  const { puertos, getIpComponente, updateIpComponente, deleteIpComponente } =
+    useInventario()
   const [puertoSeleccionado, setPuertoSeleccionado] = useState(null)
   const [editandoIp, setEditandoIp] = useState(false)
   const [ipLocal, setIpLocal] = useState("")
+  const [modalConfirm, setModalConfirm] = useState({
+    open: false,
+    mode: null, // "update" | "delete"
+  })
 
-  const componente = componentes.find((c) => c.id === Number(componenteId))
+  const componente = findComponenteById(componenteId)
   const puertosFiltrados = componente ? getPuertosByComponenteId(puertos, componente.id) : []
   const rack = componente ? racks.find((r) => r.id === componente.rackId) : null
   const area = rack ? areas.find((a) => a.id === rack.areaId) : null
@@ -31,19 +37,52 @@ function ComponenteView() {
     ? puertosFiltrados.find((p) => p.id === puertoSeleccionado.id)
     : null
 
-  const ipActual = componente ? getIpComponente(componente.id) : "192.168.0.31"
+  const ipActual = componente ? getIpComponente(componente.id) : null
+  const tieneIpEnDb =
+    ipActual != null && String(ipActual).trim().length > 0
   const esSwitch = componente?.nombre.toLowerCase().includes("switch")
+  const esFibra = componente?.nombre.toLowerCase().includes("fibra")
 
   const iniciarEdicionIp = () => {
-    setIpLocal(ipActual)
+    setIpLocal(ipActual ?? "")
     setEditandoIp(true)
   }
 
-  const guardarIp = () => {
-    if (componente && ipLocal.trim()) {
-      updateIpComponente(componente.id, ipLocal.trim())
+  const ejecutarCambioIp = () => {
+    if (!componente) return
+    const v = ipLocal.trim()
+
+    if (modalConfirm.mode === "delete") {
+      deleteIpComponente(componente.id)
+      setEditandoIp(false)
+      return
+    }
+
+    // update / save
+    if (v) {
+      updateIpComponente(componente.id, v)
     }
     setEditandoIp(false)
+  }
+
+  const prepararConfirmActualizar = () => {
+    if (!componente) return
+    const v = ipLocal.trim()
+
+    if (v) {
+      setModalConfirm({ open: true, mode: "update" })
+      return
+    }
+
+    // Si dejó vacío, interpreta como "eliminar" (solo si ya existía en BD).
+    if (tieneIpEnDb) {
+      setModalConfirm({ open: true, mode: "delete" })
+    }
+  }
+
+  const prepararConfirmBorrar = () => {
+    if (!componente || !tieneIpEnDb) return
+    setModalConfirm({ open: true, mode: "delete" })
   }
 
   const puertosImpares = puertosFiltrados.filter((p) => p.numero % 2 === 1)
@@ -57,6 +96,36 @@ function ComponenteView() {
 
   return (
     <div className="min-h-screen bg-white p-4 sm:p-6 lg:p-8">
+      {modalConfirm.open && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center">
+            <p className="text-gray-800 mb-4">
+              {modalConfirm.mode === "delete"
+                ? "Estas seguro que quieres eliminar la ip?"
+                : "Estas seguro que quieres actualizar la ip?"}
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setModalConfirm({ open: false, mode: null })}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalConfirm({ open: false, mode: null })
+                  ejecutarCambioIp()
+                }}
+                className="px-4 py-2 bg-[#1e3a5f] hover:bg-[#2d4a73] text-white font-medium rounded"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="mb-4 sm:mb-6 flex items-center gap-2 sm:gap-4 flex-wrap">
         <button
           type="button"
@@ -136,36 +205,50 @@ function ComponenteView() {
                     {puertoDetalle.numero}
                   </td>
                 </tr>
-                <tr>
-                  <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Número Panel</td>
-                  <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                    {puertoDetalle.numeroPanel || "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Puerto Panel</td>
-                  <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                    {puertoDetalle.puertoPanel || "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Número Switch</td>
-                  <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                    {puertoDetalle.numeroSwitch || "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Puerto Switch</td>
-                  <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                    {puertoDetalle.puertoSwitch || "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Equipo Conectado</td>
-                  <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                    {puertoDetalle.equipoConectado || "—"}
-                  </td>
-                </tr>
+                {!esFibra && (
+                  <>
+                    <tr>
+                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                        Número Panel
+                      </td>
+                      <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                        {puertoDetalle.numeroPanel || "—"}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                        Puerto Panel
+                      </td>
+                      <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                        {puertoDetalle.puertoPanel || "—"}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                        Número Switch
+                      </td>
+                      <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                        {puertoDetalle.numeroSwitch || "—"}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                        Puerto Switch
+                      </td>
+                      <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                        {puertoDetalle.puertoSwitch || "—"}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                        Equipo Conectado
+                      </td>
+                      <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                        {puertoDetalle.equipoConectado || "—"}
+                      </td>
+                    </tr>
+                  </>
+                )}
                 <tr>
                   <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Nombre</td>
                   <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
@@ -176,7 +259,7 @@ function ComponenteView() {
                   <tr>
                     <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">IP</td>
                     <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                      {ipActual}
+                      {puertoDetalle.ip || "—"}
                     </td>
                   </tr>
                 )}
@@ -205,22 +288,32 @@ function ComponenteView() {
                     type="text"
                     value={ipLocal}
                     onChange={(e) => setIpLocal(e.target.value)}
-                    onBlur={guardarIp}
-                    onKeyDown={(e) => e.key === "Enter" && guardarIp()}
+                    onKeyDown={(e) => e.key === "Enter" && prepararConfirmActualizar()}
                     className="border border-gray-300 rounded px-2 py-1 text-sm w-36"
                     autoFocus
                   />
                   <button
                     type="button"
-                    onClick={guardarIp}
+                    onClick={prepararConfirmActualizar}
                     className="text-[#1e3a5f] text-sm font-medium"
                   >
-                    Guardar
+                    {tieneIpEnDb ? "Actualizar" : "Guardar"}
                   </button>
+                  {tieneIpEnDb && (
+                    <button
+                      type="button"
+                      onClick={prepararConfirmBorrar}
+                      className="text-red-600 text-sm font-medium hover:underline"
+                    >
+                      Borrar
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
-                  <span className="text-gray-600 text-sm">IP: {ipActual}</span>
+                  <span className="text-gray-600 text-sm">
+                    IP: {tieneIpEnDb ? ipActual : "—"}
+                  </span>
                   <button
                     type="button"
                     onClick={iniciarEdicionIp}

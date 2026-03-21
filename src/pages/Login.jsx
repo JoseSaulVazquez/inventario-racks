@@ -5,18 +5,38 @@ function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const [form, setForm] = useState({ usuario: "", password: "" })
+  const [error, setError] = useState("")
 
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    // Aquí en el futuro se validarán las credenciales contra la base de datos
-    localStorage.setItem("auth-ok", "1")
-    const from = location.state?.from?.pathname || "/"
-    navigate(from, { replace: true })
+    setError("")
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: form.usuario,
+          password: form.password,
+        }),
+      })
+
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.token) {
+        setError(data?.error || "Credenciales inválidas")
+        return
+      }
+
+      localStorage.setItem("auth-token", data.token)
+      const from = location.state?.from?.pathname || "/"
+      navigate(from, { replace: true })
+    } catch (_) {
+      setError("Error de conexión")
+    }
   }
 
   return (
@@ -65,6 +85,11 @@ function Login() {
           >
             Iniciar sesión
           </button>
+          {error && (
+            <p className="text-sm text-red-600 font-medium text-center pt-1">
+              {error}
+            </p>
+          )}
         </form>
       </div>
 

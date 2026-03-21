@@ -1,14 +1,32 @@
+import { useState, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { racks, areas, getComponentesByRackId } from "../data/mockData"
+import { getComponentesForRack } from "../utils/rackMerge"
+import { loadRackDynamicTotalU } from "../utils/rackDynamicStorage"
 import RackVisual from "../components/RackVisual"
+import Caseta2AdminPanel from "../components/Caseta2AdminPanel"
 
 function RackView() {
   const { rackId } = useParams()
   const navigate = useNavigate()
+  const [layoutTick, setLayoutTick] = useState(0)
+  const [mostrarConfig, setMostrarConfig] = useState(false)
 
   const rack = racks.find((r) => r.id === Number(rackId))
   const area = rack ? areas.find((a) => a.id === rack.areaId) : null
-  const componentesFiltrados = rack ? getComponentesByRackId(rack.id) : []
+
+  const onLayoutChange = useCallback(() => setLayoutTick((t) => t + 1), [])
+
+  const rackParaVisual =
+    rack && rack.id
+      ? { ...rack, totalU: loadRackDynamicTotalU(rack.id, rack.totalU) }
+      : rack
+
+  const componentesFiltrados = rack
+    ? getComponentesForRack(rack.id)
+    : []
+
+  const baseComponentes = rack ? getComponentesByRackId(rack.id) : []
 
   const handleVolver = () => {
     if (!area) {
@@ -16,6 +34,7 @@ function RackView() {
       return
     }
     if (area.id >= 1 && area.id <= 4) navigate("/oficinas")
+    else if (area.id === 5) navigate("/casetas")
     else if (area.id === 8) navigate("/racks/8")
     else navigate("/")
   }
@@ -43,8 +62,40 @@ function RackView() {
       <p className="text-gray-500 text-xs sm:text-sm mb-4 sm:mb-6">
         Seleccione un componente del rack para ver sus puertos
       </p>
-      <div className="overflow-x-auto -mx-4 sm:mx-0">
-        <RackVisual rack={rack} componentes={componentesFiltrados} />
+
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        <div className="relative w-full lg:w-[420px]">
+          <button
+            type="button"
+            onClick={() => setMostrarConfig((v) => !v)}
+            className="absolute -right-3 top-2 z-10 h-10 w-10 rounded-full bg-white border border-gray-200 shadow hover:bg-gray-50 flex items-center justify-center"
+            aria-label="Abrir configuración del rack"
+          >
+            <img
+              src="/Iconos/engranaje.png"
+              alt="Config"
+              className="h-5 w-5 object-contain"
+            />
+          </button>
+
+          <div
+            className="overflow-x-auto -mx-4 sm:mx-0"
+            key={layoutTick}
+          >
+            <RackVisual rack={rackParaVisual} componentes={componentesFiltrados} />
+          </div>
+        </div>
+
+        <div className="w-full lg:flex-1">
+          {mostrarConfig && rack ? (
+            <Caseta2AdminPanel
+              rackId={rack.id}
+              defaultTotalU={rack.totalU}
+              baseComponentes={baseComponentes}
+              onLayoutChange={onLayoutChange}
+            />
+          ) : null}
+        </div>
       </div>
     </div>
   )

@@ -5,6 +5,7 @@ function Navbar() {
 
   const cerrarSesion = () => {
     localStorage.removeItem("auth-ok")
+    localStorage.removeItem("auth-token")
     // opcional: limpiar cache local para evitar ver datos antiguos tras salir
     // localStorage.removeItem("inventario-puertos")
     // localStorage.removeItem("inventario-ips-componentes")

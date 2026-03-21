@@ -7,7 +7,7 @@ const ICONOS_IMG = {
   comedor: "/Iconos/Comedor.png",
   planta: "/Iconos/Planta.png",
   mantenimiento: "/Iconos/Mantenimiento.png",
-  hotel: "/Iconos/Hotel.png",
+  dormitorios: "/Iconos/Hotel.png",
 }
 
 function Home() {
@@ -16,6 +16,10 @@ function Home() {
   const handleUbicacion = (ubicacion) => {
     if (ubicacion.id === "oficinas") {
       navigate("/oficinas")
+      return
+    }
+    if (ubicacion.id === "casetas") {
+      navigate("/casetas")
       return
     }
     const rackId = ubicacionToRackId[ubicacion.id]
