@@ -101,8 +101,8 @@ function ComponenteView() {
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center">
             <p className="text-gray-800 mb-4">
               {modalConfirm.mode === "delete"
-                ? "Estas seguro que quieres eliminar la ip?"
-                : "Estas seguro que quieres actualizar la ip?"}
+                ? "¿Estás seguro de que quieres eliminar la IP?"
+                : "¿Estás seguro de que quieres actualizar la IP?"}
             </p>
             <div className="flex justify-center gap-3">
               <button
