@@ -99,7 +99,28 @@ app.get("/api/puertos", requireAuth, async (req, res) => {
       "FROM conexiones_red c " +
       "LEFT JOIN ips_switch isw " +
       "ON isw.area = c.area AND isw.numero_switch = c.numero_switch" +
-      (where.length ? ` WHERE ${where.join(" AND ")}` : "");
+      (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
+      " UNION ALL " +
+      "SELECT " +
+      "NULL::bigint AS id, " +
+      "isw.area, " +
+      "NULL::text AS nombre, " +
+      "NULL::text AS estado, " +
+      "NULL::text AS puerto_panel, " +
+      "NULL::integer AS numero_panel, " +
+      "NULL::text AS conector, " +
+      "NULL::text AS ip, " +
+      "isw.ip_switch AS ip_switch, " +
+      "isw.numero_switch, " +
+      "NULL::text AS puerto_switch, " +
+      "NULL::text AS equipo_conectado, " +
+      "NULL::text AS notas, " +
+      "NULL::text AS poe_puerto " +
+      "FROM ips_switch isw " +
+      "WHERE NOT EXISTS (" +
+      "SELECT 1 FROM conexiones_red c2 " +
+      "WHERE c2.area = isw.area AND c2.numero_switch = isw.numero_switch" +
+      ")";
 
     const result = await pool.query(sql, params);
     res.json(result.rows);

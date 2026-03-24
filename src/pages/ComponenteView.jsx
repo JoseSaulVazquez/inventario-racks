@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { racks, areas, getPuertosByComponenteId } from "../data/mockData"
 import { findComponenteById } from "../utils/rackMerge"
@@ -23,10 +23,17 @@ function ComponenteView() {
   const [puertoSeleccionado, setPuertoSeleccionado] = useState(null)
   const [editandoIp, setEditandoIp] = useState(false)
   const [ipLocal, setIpLocal] = useState("")
+  const [mostrarAyuda, setMostrarAyuda] = useState(false)
   const [modalConfirm, setModalConfirm] = useState({
     open: false,
     mode: null, // "update" | "delete"
   })
+
+  useEffect(() => {
+    const abrirAyuda = () => setMostrarAyuda(true)
+    window.addEventListener("open-componente-help", abrirAyuda)
+    return () => window.removeEventListener("open-componente-help", abrirAyuda)
+  }, [])
 
   const componente = findComponenteById(componenteId)
   const puertosFiltrados = componente ? getPuertosByComponenteId(puertos, componente.id) : []
@@ -99,6 +106,43 @@ function ComponenteView() {
 
   return (
     <div className="min-h-screen bg-white p-4 sm:p-6 lg:p-8">
+      {mostrarAyuda && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-xl p-5 sm:p-6">
+            <h2 className="text-[#1e3a5f] font-semibold text-lg mb-3">
+              Ayuda: Vista del Componente
+            </h2>
+            <div className="text-sm text-gray-700 space-y-2">
+              <p>
+                Esta pantalla muestra los puertos del componente seleccionado en el rack
+                (por ejemplo, switch, patch panel o fibra).
+              </p>
+              <p>
+                Puedes hacer clic en un puerto para ver su información detallada en la
+                tabla: área, conector, números de panel/switch, equipo conectado y notas.
+              </p>
+              <p>
+                Si el componente es un switch, en la parte lateral puedes guardar,
+                actualizar o borrar la IP del switch.
+              </p>
+              <p>
+                El botón <strong>Gestionar</strong> abre la gestión completa del puerto
+                seleccionado para editar sus datos.
+              </p>
+            </div>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setMostrarAyuda(false)}
+                className="px-4 py-2 bg-[#1e3a5f] hover:bg-[#2d4a73] text-white font-medium rounded"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalConfirm.open && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center">

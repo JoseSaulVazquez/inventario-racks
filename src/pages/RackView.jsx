@@ -13,6 +13,7 @@ function RackView() {
   const { refrescarPuertosDesdeBD } = useInventario()
   const [layoutTick, setLayoutTick] = useState(0)
   const [mostrarConfig, setMostrarConfig] = useState(false)
+  const [mostrarAyuda, setMostrarAyuda] = useState(false)
 
   useEffect(() => {
     refrescarPuertosDesdeBD()
@@ -85,6 +86,18 @@ function RackView() {
               className="h-5 w-5 object-contain"
             />
           </button>
+          <button
+            type="button"
+            onClick={() => setMostrarAyuda(true)}
+            className="absolute -right-3 top-14 z-10 h-10 w-10 rounded-full bg-white border border-gray-200 shadow hover:bg-gray-50 flex items-center justify-center"
+            aria-label="Abrir ayuda de la vista del rack"
+          >
+            <img
+              src="/Iconos/ayuda.png"
+              alt="Ayuda"
+              className="h-5 w-5 object-contain"
+            />
+          </button>
 
           <div
             className="overflow-x-auto -mx-4 sm:mx-0"
@@ -105,6 +118,41 @@ function RackView() {
           ) : null}
         </div>
       </div>
+
+      {mostrarAyuda && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-xl p-5 sm:p-6">
+            <h2 className="text-[#1e3a5f] font-semibold text-lg mb-3">Ayuda: Vista del Rack</h2>
+            <div className="text-sm text-gray-700 space-y-2">
+              <p>
+                Esta pantalla muestra los equipos instalados en el rack, ordenados por
+                posición en U (de arriba hacia abajo).
+              </p>
+              <p>
+                Cada fila representa una unidad del rack y cada bloque corresponde a un
+                componente (por ejemplo: fibra, patch panel o switch).
+              </p>
+              <p>
+                Al seleccionar un componente, se abre su vista de detalle para gestionar
+                sus puertos, estado y datos relacionados.
+              </p>
+              <p>
+                El ícono de engranaje abre la gestión del rack, donde puedes ajustar la
+                configuración del layout.
+              </p>
+            </div>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setMostrarAyuda(false)}
+                className="px-4 py-2 bg-[#1e3a5f] hover:bg-[#2d4a73] text-white font-medium rounded"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

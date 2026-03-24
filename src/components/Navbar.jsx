@@ -1,7 +1,9 @@
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 
 function Navbar() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const enVistaComponente = location.pathname.startsWith("/componente/")
 
   const cerrarSesion = () => {
     localStorage.removeItem("auth-ok")
@@ -22,6 +24,20 @@ function Navbar() {
         />
       </Link>
       <nav className="flex items-center gap-4 sm:gap-6">
+        {enVistaComponente && (
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("open-componente-help"))}
+            className="h-8 w-8 rounded-full bg-white border border-gray-200 shadow hover:bg-gray-50 flex items-center justify-center"
+            aria-label="Abrir ayuda de la vista del componente"
+          >
+            <img
+              src="/Iconos/ayuda.png"
+              alt="Ayuda"
+              className="h-4 w-4 object-contain"
+            />
+          </button>
+        )}
         <button
           type="button"
           onClick={cerrarSesion}
@@ -29,12 +45,6 @@ function Navbar() {
         >
           Cerrar sesión
         </button>
-        <Link
-          to="/"
-          className="text-[#1e3a5f] font-medium text-xs sm:text-sm uppercase tracking-wide hover:underline whitespace-nowrap"
-        >
-          Inicio
-        </Link>
       </nav>
     </header>
   )
