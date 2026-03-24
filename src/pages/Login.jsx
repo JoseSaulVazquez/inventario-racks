@@ -1,9 +1,11 @@
 import { useState } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
+import { useInventario } from "../context/InventarioContext"
 
 function Login() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { refrescarPuertosDesdeBD } = useInventario()
   const [form, setForm] = useState({ usuario: "", password: "" })
   const [error, setError] = useState("")
 
@@ -32,6 +34,11 @@ function Login() {
       }
 
       localStorage.setItem("auth-token", data.token)
+      try {
+        await refrescarPuertosDesdeBD()
+      } catch (_) {
+        /* sync opcional; la app puede refrescar al entrar a un rack */
+      }
       const from = location.state?.from?.pathname || "/"
       navigate(from, { replace: true })
     } catch (_) {

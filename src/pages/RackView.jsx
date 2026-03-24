@@ -1,16 +1,24 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { racks, areas, getComponentesByRackId } from "../data/mockData"
 import { getComponentesForRack } from "../utils/rackMerge"
 import { loadRackDynamicTotalU } from "../utils/rackDynamicStorage"
+import { useInventario } from "../context/InventarioContext"
 import RackVisual from "../components/RackVisual"
 import Caseta2AdminPanel from "../components/Caseta2AdminPanel"
 
 function RackView() {
   const { rackId } = useParams()
   const navigate = useNavigate()
+  const { refrescarPuertosDesdeBD } = useInventario()
   const [layoutTick, setLayoutTick] = useState(0)
   const [mostrarConfig, setMostrarConfig] = useState(false)
+
+  useEffect(() => {
+    refrescarPuertosDesdeBD()
+    // Solo al cambiar de rack (refrescar se recrea cada render en el contexto)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rackId])
 
   const rack = racks.find((r) => r.id === Number(rackId))
   const area = rack ? areas.find((a) => a.id === rack.areaId) : null

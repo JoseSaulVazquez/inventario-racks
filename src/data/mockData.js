@@ -25,6 +25,7 @@ export const areas = [
   { id: 5, nombre: "Casetas", codigoBd: "Caseta" },
   { id: 6, nombre: "Comedor", codigoBd: "Comedor" },
   { id: 7, nombre: "Dormitorios", codigoBd: "Dormitorios" },
+  // Planta: cada rack tiene su propio `areaConexionesRed` en `racks` (misma tabla conexiones_red).
   { id: 8, nombre: "Planta" },
   { id: 9, nombre: "Mantenimiento", codigoBd: "Mantenimiento" },
 ]
@@ -55,12 +56,24 @@ export const racks = [
   { id: 17, nombre: "Rack Caseta 2", totalU: 42, areaId: 5 },
   { id: 8, nombre: "Rack Comedor", totalU: 20, areaId: 6 },
   { id: 9, nombre: "Rack Dormitorios", totalU: 20, areaId: 7 },
-  { id: 10, nombre: "IDF Principal", totalU: 42, areaId: 8 },
-  { id: 11, nombre: "Rack WH", totalU: 42, areaId: 8 },
-  { id: 12, nombre: "Rack Sheet Metal", totalU: 42, areaId: 8 },
-  { id: 13, nombre: "Rack WH2", totalU: 42, areaId: 8 },
-  { id: 14, nombre: "Rack CNC", totalU: 42, areaId: 8 },
-  { id: 15, nombre: "Rack CMM", totalU: 42, areaId: 8 },
+  {
+    id: 10,
+    nombre: "IDF Principal",
+    totalU: 42,
+    areaId: 8,
+    areaConexionesRed: "IDF PRINCIPAL",
+  },
+  { id: 11, nombre: "Rack WH", totalU: 42, areaId: 8, areaConexionesRed: "RACK WH" },
+  {
+    id: 12,
+    nombre: "Rack Sheet Metal",
+    totalU: 42,
+    areaId: 8,
+    areaConexionesRed: "RACK SHEET METAL",
+  },
+  { id: 13, nombre: "Rack WH2", totalU: 42, areaId: 8, areaConexionesRed: "RACK WH2" },
+  { id: 14, nombre: "Rack CNC", totalU: 42, areaId: 8, areaConexionesRed: "RACK CNC" },
+  { id: 15, nombre: "Rack CMM", totalU: 42, areaId: 8, areaConexionesRed: "RACK CMM" },
   { id: 16, nombre: "Rack Mantenimiento", totalU: 20, areaId: 9 },
 ]
 
@@ -148,8 +161,19 @@ export const componentes = [
   { id: 72, nombre: "Switch 16p", rackId: 9, posicionInicio: 12, alturaU: 1, numPuertos: 18 },
   { id: 73, nombre: "Patch Panel 24p", rackId: 9, posicionInicio: 11, alturaU: 1, numPuertos: 24 },
   { id: 74, nombre: "Fibra", rackId: 9, posicionInicio: 10, alturaU: 1, numPuertos: 14 },
-  // Rack 10 - Rack Baño (sin datos del usuario, placeholder)
-  { id: 75, nombre: "Switch 24p", rackId: 10, posicionInicio: 42, alturaU: 1, numPuertos: 24 },
+  // Rack 10 - IDF Principal (42U), orden de arriba hacia abajo
+  { id: 75, nombre: "Fibra", rackId: 10, posicionInicio: 42, alturaU: 1, numPuertos: 20 },
+  { id: 92, nombre: "Fibra", rackId: 10, posicionInicio: 41, alturaU: 1, numPuertos: 20 },
+  { id: 93, nombre: "Switch 24p", rackId: 10, posicionInicio: 40, alturaU: 1, numPuertos: 26 },
+  // bdNumeroPanel = valor de conexiones_red.numero_panel (tu BD usa 1, 3, 4, 5… no siempre 1..n del rack)
+  { id: 94, nombre: "Patch Panel 24p", rackId: 10, posicionInicio: 39, alturaU: 1, numPuertos: 24, bdNumeroPanel: 1 },
+  { id: 95, nombre: "Switch Core 24p", rackId: 10, posicionInicio: 38, alturaU: 1, numPuertos: 26 },
+  { id: 96, nombre: "Patch Panel 24p", rackId: 10, posicionInicio: 37, alturaU: 1, numPuertos: 24, bdNumeroPanel: 3 },
+  { id: 97, nombre: "Patch Panel 24p", rackId: 10, posicionInicio: 36, alturaU: 1, numPuertos: 24, bdNumeroPanel: 4 },
+  { id: 98, nombre: "Patch Panel 24p", rackId: 10, posicionInicio: 35, alturaU: 1, numPuertos: 24, bdNumeroPanel: 2 },
+  { id: 99, nombre: "Switch 24p", rackId: 10, posicionInicio: 34, alturaU: 1, numPuertos: 26 },
+  { id: 100, nombre: "Patch Panel 12p", rackId: 10, posicionInicio: 33, alturaU: 1, numPuertos: 12, bdNumeroPanel: 5 },
+  { id: 101, nombre: "Componente POE 9p", rackId: 10, posicionInicio: 32, alturaU: 1, numPuertos: 9 },
   // Rack 11 - Rack 5-9B (42U)
   { id: 76, nombre: "Fibra", rackId: 11, posicionInicio: 42, alturaU: 1, numPuertos: 21 },
   { id: 77, nombre: "Patch Panel 24p", rackId: 11, posicionInicio: 41, alturaU: 1, numPuertos: 24 },
@@ -158,14 +182,14 @@ export const componentes = [
   { id: 79, nombre: "Switch 16p", rackId: 12, posicionInicio: 42, alturaU: 1, numPuertos: 18 },
   { id: 80, nombre: "Patch Panel 24p", rackId: 12, posicionInicio: 41, alturaU: 1, numPuertos: 24 },
   { id: 81, nombre: "Switch Linksys 24p", rackId: 12, posicionInicio: 40, alturaU: 1, numPuertos: 24 },
-  // Rack 13 - Rack 5-20A (42U)
+  // Rack 13 - Rack WH2 (42U): Fibra → Patch 24p → Switch 24p
   { id: 82, nombre: "Fibra", rackId: 13, posicionInicio: 42, alturaU: 1, numPuertos: 21 },
   { id: 83, nombre: "Patch Panel 24p", rackId: 13, posicionInicio: 41, alturaU: 1, numPuertos: 24 },
-  { id: 84, nombre: "Patch Panel 24p", rackId: 13, posicionInicio: 40, alturaU: 1, numPuertos: 24 },
-  // Rack 14 - Rack 1-20B (42U)
+  { id: 84, nombre: "Switch 24p", rackId: 13, posicionInicio: 40, alturaU: 1, numPuertos: 26 },
+  // Rack 14 - Rack CNC (42U): Fibra → Patch 24p → Switch 24p
   { id: 85, nombre: "Fibra", rackId: 14, posicionInicio: 42, alturaU: 1, numPuertos: 21 },
   { id: 86, nombre: "Patch Panel 24p", rackId: 14, posicionInicio: 41, alturaU: 1, numPuertos: 24 },
-  { id: 87, nombre: "Patch Panel 24p", rackId: 14, posicionInicio: 40, alturaU: 1, numPuertos: 24 },
+  { id: 87, nombre: "Switch 24p", rackId: 14, posicionInicio: 40, alturaU: 1, numPuertos: 26 },
   // Rack 15 - Rack Oficina (42U)
   { id: 88, nombre: "Switch 24p", rackId: 15, posicionInicio: 42, alturaU: 1, numPuertos: 26 },
   // Rack 16 - Mantenimiento (20U)
@@ -196,9 +220,22 @@ function generarPuertos(componenteId, cantidad) {
       nombre: "",
       ip: null,
       bdRowId: null,
+      poePuerto: null,
     })
   }
   return lista
+}
+
+/** Valor de `conexiones_red.area` para este rack (mayúsculas). Planta: por rack; resto: codigoBd del área. */
+export function getAreaConexionesRed(rack) {
+  if (!rack) return null
+  const raw = rack.areaConexionesRed
+  if (raw != null && String(raw).trim() !== "")
+    return String(raw).trim().toUpperCase()
+  const areaObj = areas.find((a) => a.id === rack.areaId)
+  const c = areaObj?.codigoBd
+  if (c != null && String(c).trim() !== "") return String(c).trim().toUpperCase()
+  return null
 }
 
 let idCounter = 1
@@ -268,6 +305,22 @@ export function getNumeroPanelEnRack(componenteId, listaComponentes = componente
 
   const idx = panelsDelRack.findIndex((c) => c.id === comp.id)
   return idx === -1 ? null : idx + 1
+}
+
+/**
+ * `numero_panel` en BD para este patch panel. Si el componente tiene `bdNumeroPanel`, coincide con tu tabla;
+ * si no, el índice por posición (getNumeroPanelEnRack).
+ */
+export function getBdNumeroPanel(componenteId, listaComponentes = componentes) {
+  const list = listaComponentes
+  const comp = list.find((c) => c.id === Number(componenteId))
+  if (!comp) return null
+  if (!String(comp.nombre).toLowerCase().includes("patch panel")) return null
+  if (comp.bdNumeroPanel != null && String(comp.bdNumeroPanel).trim() !== "") {
+    const n = Number(comp.bdNumeroPanel)
+    if (Number.isFinite(n)) return n
+  }
+  return getNumeroPanelEnRack(componenteId, listaComponentes)
 }
 
 /** Índice de switch en todo el área (varios racks), por orden de rack y posición. Para BD cuando un área tiene más de un rack (p. ej. Caseta 1 + 2). */

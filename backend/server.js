@@ -94,7 +94,8 @@ app.get("/api/puertos", requireAuth, async (req, res) => {
       "c.numero_switch, " +
       "c.puerto_switch, " +
       "c.equipo_conectado, " +
-      "c.notas " +
+      "c.notas, " +
+      "c.poe_puerto " +
       "FROM conexiones_red c " +
       "LEFT JOIN ips_switch isw " +
       "ON isw.area = c.area AND isw.numero_switch = c.numero_switch" +
@@ -160,11 +161,19 @@ app.post("/api/conexiones_red/upsert", requireAuth, async (req, res) => {
     const hasPanelKeys = area && numero_panel != null && puerto_panel != null
     const conector = toNull(body.conector)
     const hasConectorKeys = area && conector != null
+    const poe_puerto_raw = body.poe_puerto
+    const poe_puerto = toNull(poe_puerto_raw)
+    // Incluye 0; rechaza solo null/undefined/string vacío (JSON puede mandar número)
+    const hasPoeKeys =
+      area &&
+      poe_puerto_raw !== undefined &&
+      poe_puerto_raw !== null &&
+      String(poe_puerto_raw).trim() !== ""
 
-    if (id == null && !hasSwitchKeys && !hasPanelKeys && !hasConectorKeys) {
+    if (id == null && !hasSwitchKeys && !hasPanelKeys && !hasConectorKeys && !hasPoeKeys) {
       return res
         .status(400)
-        .json({ ok: false, error: "Faltan llaves para upsert (switch/panel/conector)" })
+        .json({ ok: false, error: "Faltan llaves para upsert (switch/panel/conector/poe)" })
     }
 
     const ip = toNull(body.ip)
@@ -184,12 +193,15 @@ app.post("/api/conexiones_red/upsert", requireAuth, async (req, res) => {
       puerto_switch,
       equipo_conectado,
       notas,
+      poe_puerto,
     ]
 
-    // Si vienen ambos (switch y panel), priorizamos panel para no tocar filas del switch
-    // cuando se está editando un Patch Panel.
+    // POE primero si viene poe_puerto (formulario POE puede incluir también panel/switch).
+    // Luego panel / switch / conector.
     let whereSql = ""
-    if (hasPanelKeys) {
+    if (hasPoeKeys) {
+      whereSql = `area = $1 AND TRIM(COALESCE(poe_puerto::text, '')) = TRIM(COALESCE($12::text, ''))`
+    } else if (hasPanelKeys) {
       whereSql = `area = $1 AND numero_panel = $5 AND puerto_panel = $4`
     } else if (hasSwitchKeys) {
       whereSql = `area = $1 AND numero_switch = $8 AND puerto_switch = $9`
@@ -211,9 +223,10 @@ app.post("/api/conexiones_red/upsert", requireAuth, async (req, res) => {
         numero_switch = $8,
         puerto_switch = $9,
         equipo_conectado = $10,
-        notas = $11
+        notas = $11,
+        poe_puerto = $12
       WHERE ${whereSql}
-      RETURNING area
+      RETURNING id
     `
 
     // Si ya viene el id, actualizamos SIEMPRE esa fila.
@@ -231,31 +244,36 @@ app.post("/api/conexiones_red/upsert", requireAuth, async (req, res) => {
           numero_switch = $8,
           puerto_switch = $9,
           equipo_conectado = $10,
-          notas = $11
-        WHERE id = $12
+          notas = $11,
+          poe_puerto = $12
+        WHERE id = $13
+        RETURNING id
       `
       const updateByIdResult = await pool.query(updateByIdSql, [...values, id])
       if (updateByIdResult.rowCount && updateByIdResult.rowCount > 0) {
-        return res.json({ ok: true })
+        const rid = updateByIdResult.rows[0]?.id
+        return res.json({ ok: true, id: rid != null ? Number(rid) : Number(id) })
       }
       return res.status(404).json({ ok: false, error: "Fila no encontrada" })
     }
 
     const updateResult = await pool.query(updateSql, values)
     if (updateResult.rowCount && updateResult.rowCount > 0) {
-      return res.json({ ok: true })
+      const rid = updateResult.rows[0]?.id
+      return res.json({ ok: true, id: rid != null ? Number(rid) : null })
     }
 
     const insertSql = `
       INSERT INTO conexiones_red(
         area, nombre, estado, puerto_panel, numero_panel, conector, ip,
-        numero_switch, puerto_switch, equipo_conectado, notas
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-      RETURNING area
+        numero_switch, puerto_switch, equipo_conectado, notas, poe_puerto
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      RETURNING id
     `
 
-    await pool.query(insertSql, values)
-    return res.json({ ok: true })
+    const insResult = await pool.query(insertSql, values)
+    const newId = insResult.rows[0]?.id
+    return res.json({ ok: true, id: newId != null ? Number(newId) : null })
   } catch (error) {
     console.error(error)
     res.status(500).json({ ok: false, error: "Error en upsert" })
@@ -274,15 +292,17 @@ app.post("/api/conexiones_red/delete", requireAuth, async (req, res) => {
     const numero_panel = parseNumero(body.numero_panel)
     const puerto_panel = parsePuerto(body.puerto_panel)
     const conector = toNull(body.conector)
+    const poe_puerto_del = toNull(body.poe_puerto)
 
     const hasSwitchKeys = area && numero_switch != null && puerto_switch != null
     const hasPanelKeys = area && numero_panel != null && puerto_panel != null
     const hasConectorKeys = area && conector != null
+    const hasPoeKeys = area && poe_puerto_del != null
 
-    if (id == null && !hasSwitchKeys && !hasPanelKeys && !hasConectorKeys) {
+    if (id == null && !hasSwitchKeys && !hasPanelKeys && !hasConectorKeys && !hasPoeKeys) {
       return res
         .status(400)
-        .json({ ok: false, error: "Faltan llaves para eliminar (switch/panel/conector)" })
+        .json({ ok: false, error: "Faltan llaves para eliminar (switch/panel/conector/poe)" })
     }
 
     const estadoLibre = "Libre"
@@ -302,7 +322,8 @@ app.post("/api/conexiones_red/delete", requireAuth, async (req, res) => {
             puerto_panel = NULL,
             equipo_conectado = NULL,
             notas = NULL,
-            nombre = NULL
+            nombre = NULL,
+            poe_puerto = NULL
           WHERE id = $2
         `,
         [estadoLibre, id]
@@ -311,8 +332,28 @@ app.post("/api/conexiones_red/delete", requireAuth, async (req, res) => {
     }
 
     let result
-    // Priorizar panel cuando existan claves de panel (evita borrar una fila del switch al editar Patch Panel).
-    if (hasPanelKeys) {
+    if (hasPoeKeys) {
+      result = await pool.query(
+        `
+          UPDATE conexiones_red
+          SET
+            estado = $3,
+            conector = NULL,
+            ip = NULL,
+            numero_switch = NULL,
+            puerto_switch = NULL,
+            numero_panel = NULL,
+            puerto_panel = NULL,
+            equipo_conectado = NULL,
+            notas = NULL,
+            nombre = NULL,
+            poe_puerto = NULL
+          WHERE area = $1 AND TRIM(COALESCE(poe_puerto::text, '')) = TRIM(COALESCE($2::text, ''))
+          RETURNING area
+        `,
+        [area, poe_puerto_del, estadoLibre]
+      )
+    } else if (hasPanelKeys) {
       result = await pool.query(
         `
           UPDATE conexiones_red
@@ -326,7 +367,8 @@ app.post("/api/conexiones_red/delete", requireAuth, async (req, res) => {
             puerto_panel = NULL,
             equipo_conectado = NULL,
             notas = NULL,
-            nombre = NULL
+            nombre = NULL,
+            poe_puerto = NULL
           WHERE area = $1 AND numero_panel = $2 AND puerto_panel = $3
           RETURNING area
         `,
@@ -346,7 +388,8 @@ app.post("/api/conexiones_red/delete", requireAuth, async (req, res) => {
             puerto_panel = NULL,
             equipo_conectado = NULL,
             notas = NULL,
-            nombre = NULL
+            nombre = NULL,
+            poe_puerto = NULL
           WHERE area = $1 AND numero_switch = $2 AND puerto_switch = $3
           RETURNING area
         `,
@@ -367,7 +410,8 @@ app.post("/api/conexiones_red/delete", requireAuth, async (req, res) => {
             puerto_panel = NULL,
             equipo_conectado = NULL,
             notas = NULL,
-            nombre = NULL
+            nombre = NULL,
+            poe_puerto = NULL
           WHERE area = $1 AND conector = $2
           RETURNING area
         `,

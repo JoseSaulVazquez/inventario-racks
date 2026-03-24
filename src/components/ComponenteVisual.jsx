@@ -1,8 +1,31 @@
 import { useNavigate } from "react-router-dom"
+import { useInventario } from "../context/InventarioContext"
+import { getPuertosByComponenteId } from "../data/mockData"
+
+function miniColor(estado) {
+  if (estado === "ocupado") return "bg-emerald-500"
+  if (estado === "dañado") return "bg-red-500"
+  return "bg-gray-400"
+}
 
 function ComponenteVisual({ componente }) {
   const navigate = useNavigate()
-  const numPuertos = Math.min(componente.numPuertos ?? 8, 12)
+  const { puertos } = useInventario()
+  const lista = getPuertosByComponenteId(puertos, componente.id)
+    .slice()
+    .sort((a, b) => a.numero - b.numero)
+
+  const cap = 24
+  const maxShow = Math.min(lista.length > 0 ? lista.length : cap, cap)
+  const muestra =
+    lista.length > 0
+      ? lista.slice(0, maxShow)
+      : Array.from(
+          {
+            length: Math.min(componente.numPuertos ?? 8, 12),
+          },
+          () => ({ estado: "libre" })
+        )
 
   return (
     <div
@@ -11,9 +34,13 @@ function ComponenteVisual({ componente }) {
       style={{ height: `${componente.alturaU * 40}px` }}
     >
       <span className="font-medium truncate flex-1 text-center">{componente.nombre}</span>
-      <div className="flex gap-0.5 flex-shrink-0">
-        {Array.from({ length: numPuertos }).map((_, i) => (
-          <span key={i} className="w-2 h-3 bg-gray-400 rounded-sm group-hover:bg-gray-300" />
+      <div className="flex flex-wrap gap-0.5 justify-end content-center max-w-[100px] flex-shrink-0">
+        {muestra.map((p, i) => (
+          <span
+            key={lista.length > 0 ? p.id : i}
+            className={`w-1.5 h-2.5 rounded-sm flex-shrink-0 ${miniColor(p.estado)}`}
+            title={lista.length > 0 ? `Puerto ${p.numero}: ${p.estado}` : undefined}
+          />
         ))}
       </div>
     </div>

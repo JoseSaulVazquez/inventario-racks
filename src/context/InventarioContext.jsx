@@ -4,7 +4,8 @@ import {
   racks,
   areas,
   getNumeroSwitchEnRack,
-  getNumeroPanelEnRack,
+  getBdNumeroPanel,
+  getAreaConexionesRed,
 } from "../data/mockData"
 import { getMergedComponentes } from "../utils/rackMerge"
 import {
@@ -23,12 +24,12 @@ function loadPuertos() {
     if (!Array.isArray(saved)) return [...puertosIniciales]
     const staticIds = new Set(puertosIniciales.map((p) => p.id))
     const merged = puertosIniciales.map((p) => {
-      const found = saved.find((s) => s.id === p.id)
+      const found = saved.find((s) => s && Number(s.id) === Number(p.id))
       return found ? { ...p, ...found } : p
     })
     // Puertos extra guardados (p. ej. Caseta 2 antiguos) que no están en la plantilla estática
     const extras = saved.filter(
-      (s) => s && typeof s.id === "number" && !staticIds.has(s.id)
+      (s) => s && s.id != null && !staticIds.has(Number(s.id))
     )
     return extras.length ? [...merged, ...extras] : merged
   } catch {
@@ -59,6 +60,20 @@ function saveIps(ips) {
 
 const InventarioContext = createContext(null)
 
+/**
+ * Empareja poe_puerto en BD con puerto.numero del componente.
+ * En BD suele guardarse como P2, P3… además de 2, "01", BIGINT, etc.
+ */
+function normalizePoeClave(v) {
+  if (v == null) return null
+  const s = String(v).trim()
+  if (!s) return null
+  const mPx = s.match(/^P-?(\d+)$/i)
+  if (mPx) return String(parseInt(mPx[1], 10))
+  if (/^-?\d+$/.test(s)) return String(parseInt(s, 10))
+  return s.toLowerCase()
+}
+
 function crearPuertoBase(id, n, componenteId) {
   return {
     id,
@@ -77,6 +92,7 @@ function crearPuertoBase(id, n, componenteId) {
     puertoSwitch: "",
     nombre: "",
     bdRowId: null,
+    poePuerto: null,
   }
 }
 
@@ -138,6 +154,7 @@ function limpiarPuerto(p) {
     notas: "",
     ip: null,
     bdRowId: null,
+    poePuerto: null,
   }
 }
 
@@ -147,7 +164,7 @@ function bdNumeroSwitch(comp, listaComp) {
 }
 
 function bdNumeroPanel(comp, listaComp) {
-  return getNumeroPanelEnRack(comp.id, listaComp)
+  return getBdNumeroPanel(comp.id, listaComp)
 }
 
 export function InventarioProvider({ children }) {
@@ -218,7 +235,39 @@ export function InventarioProvider({ children }) {
           }
         }
 
+        const mapPoe = new Map()
+        for (const r of rows) {
+          const nk = normalizePoeClave(r.poe_puerto)
+          if (!nk) continue
+          const areaKey = normalizeAreaKey(r.area)
+          if (!areaKey) continue
+          mapPoe.set(`${areaKey}::${nk}`, r)
+        }
+
         const listaComp = getMergedComponentes()
+
+        const findPoeRow = (p, areaBdKey) => {
+          if (p.bdRowId != null) {
+            const byId = rows.find((r) => Number(r.id) === Number(p.bdRowId))
+            if (byId) return byId
+          }
+          const pref =
+            p.poePuerto != null && String(p.poePuerto).trim() !== ""
+              ? p.poePuerto
+              : p.numero
+          const k = normalizePoeClave(pref)
+          if (k) {
+            const hit = mapPoe.get(`${areaBdKey}::${k}`)
+            if (hit) return hit
+          }
+          return (
+            rows.find((r) => {
+              if (normalizeAreaKey(r.area) !== areaBdKey) return false
+              const rk = normalizePoeClave(r.poe_puerto)
+              return rk && rk === normalizePoeClave(p.numero)
+            }) || null
+          )
+        }
 
         // actualizar IP por switch (si viene en BD)
         setIpsComponentes(() => {
@@ -226,12 +275,18 @@ export function InventarioProvider({ children }) {
           for (const r of rows) {
             if (!r.ip_switch) continue
             if (r.numero_switch == null) continue
-            // Encontrar componente switch que corresponda (por area + numero_switch)
-            const areaObj = areas.find(
-              (a) => normalizeAreaKey(a.codigoBd) === normalizeAreaKey(r.area)
-            )
-            if (!areaObj) continue
-            const rackIds = racks.filter((rk) => rk.areaId === areaObj.id).map((rk) => rk.id)
+            const areaKeyRow = normalizeAreaKey(r.area)
+            const rackMatch = racks.find((rk) => getAreaConexionesRed(rk) === areaKeyRow)
+            let rackIds
+            if (rackMatch) {
+              rackIds = [rackMatch.id]
+            } else {
+              const areaObj = areas.find(
+                (a) => normalizeAreaKey(a.codigoBd) === areaKeyRow
+              )
+              if (!areaObj) continue
+              rackIds = racks.filter((rk) => rk.areaId === areaObj.id).map((rk) => rk.id)
+            }
             const switches = listaComp
               .filter((c) => rackIds.includes(c.rackId) && String(c.nombre).toLowerCase().includes("switch"))
               .map((c) => ({ c, num: bdNumeroSwitch(c, listaComp) }))
@@ -252,12 +307,13 @@ export function InventarioProvider({ children }) {
             const nombreComp = String(comp.nombre).toLowerCase()
 
             const rack = racks.find((rk) => rk.id === comp.rackId)
-            const areaObj = rack ? areas.find((a) => a.id === rack.areaId) : null
-            const areaBdKey = normalizeAreaKey(areaObj?.codigoBd)
+            const areaBdKey = rack ? getAreaConexionesRed(rack) : null
             if (!areaBdKey) return p
 
             let row = null
-            if (nombreComp.includes("switch")) {
+            if (nombreComp.includes("poe")) {
+              row = findPoeRow(p, areaBdKey)
+            } else if (nombreComp.includes("switch")) {
               const numSwitch = bdNumeroSwitch(comp, listaComp)
               if (numSwitch != null) {
                 row = mapSwitch.get(`${areaBdKey}::${numSwitch}::${p.numero}`) || null
@@ -268,8 +324,10 @@ export function InventarioProvider({ children }) {
                 row = mapPanel.get(`${areaBdKey}::${numPanel}::${p.numero}`) || null
               }
             } else {
-              // Fibra/otros: por ahora no mapeamos (no hay clave inequívoca)
               row = null
+            }
+            if (!row && p.bdRowId != null) {
+              row = rows.find((r) => Number(r.id) === Number(p.bdRowId)) ?? null
             }
             if (!row) return limpiarPuerto(p)
 
@@ -287,6 +345,10 @@ export function InventarioProvider({ children }) {
               notas: row.notas ?? null,
               ip: row.ip,
               bdRowId: row.id ?? null,
+              poePuerto:
+                row.poe_puerto != null && String(row.poe_puerto).trim() !== ""
+                  ? String(row.poe_puerto).trim()
+                  : String(p.numero),
             }
           })
           savePuertos(next)
@@ -348,19 +410,57 @@ export function InventarioProvider({ children }) {
         }
       }
 
+      const mapPoe = new Map()
+      for (const r of rows) {
+        const nk = normalizePoeClave(r.poe_puerto)
+        if (!nk) continue
+        const areaKey = normalizeAreaKey(r.area)
+        if (!areaKey) continue
+        mapPoe.set(`${areaKey}::${nk}`, r)
+      }
+
       const listaComp = getMergedComponentes()
+
+      const findPoeRow = (p, areaBdKey) => {
+        if (p.bdRowId != null) {
+          const byId = rows.find((r) => Number(r.id) === Number(p.bdRowId))
+          if (byId) return byId
+        }
+        const pref =
+          p.poePuerto != null && String(p.poePuerto).trim() !== ""
+            ? p.poePuerto
+            : p.numero
+        const k = normalizePoeClave(pref)
+        if (k) {
+          const hit = mapPoe.get(`${areaBdKey}::${k}`)
+          if (hit) return hit
+        }
+        return (
+          rows.find((r) => {
+            if (normalizeAreaKey(r.area) !== areaBdKey) return false
+            const rk = normalizePoeClave(r.poe_puerto)
+            return rk && rk === normalizePoeClave(p.numero)
+          }) || null
+        )
+      }
 
       const nextIps = {}
       for (const r of rows) {
         if (!r.ip_switch) continue
         if (r.numero_switch == null) continue
 
-        const areaObj = areas.find(
-          (a) => normalizeAreaKey(a.codigoBd) === normalizeAreaKey(r.area)
-        )
-        if (!areaObj) continue
-
-        const rackIds = racks.filter((rk) => rk.areaId === areaObj.id).map((rk) => rk.id)
+        const areaKeyRow = normalizeAreaKey(r.area)
+        const rackMatch = racks.find((rk) => getAreaConexionesRed(rk) === areaKeyRow)
+        let rackIds
+        if (rackMatch) {
+          rackIds = [rackMatch.id]
+        } else {
+          const areaObj = areas.find(
+            (a) => normalizeAreaKey(a.codigoBd) === areaKeyRow
+          )
+          if (!areaObj) continue
+          rackIds = racks.filter((rk) => rk.areaId === areaObj.id).map((rk) => rk.id)
+        }
         const switches = listaComp
           .filter(
             (c) =>
@@ -382,12 +482,13 @@ export function InventarioProvider({ children }) {
           const nombreComp = String(comp.nombre).toLowerCase()
 
           const rack = racks.find((rk) => rk.id === comp.rackId)
-          const areaObj = rack ? areas.find((a) => a.id === rack.areaId) : null
-          const areaBdKey = normalizeAreaKey(areaObj?.codigoBd)
+          const areaBdKey = rack ? getAreaConexionesRed(rack) : null
           if (!areaBdKey) return p
 
           let row = null
-          if (nombreComp.includes("switch")) {
+          if (nombreComp.includes("poe")) {
+            row = findPoeRow(p, areaBdKey)
+          } else if (nombreComp.includes("switch")) {
             const numSwitch = bdNumeroSwitch(comp, listaComp)
             if (numSwitch != null) {
               row = mapSwitch.get(`${areaBdKey}::${numSwitch}::${p.numero}`) || null
@@ -401,6 +502,9 @@ export function InventarioProvider({ children }) {
             row = null
           }
 
+          if (!row && p.bdRowId != null) {
+            row = rows.find((r) => Number(r.id) === Number(p.bdRowId)) ?? null
+          }
           if (!row) return limpiarPuerto(p)
 
           return {
@@ -414,8 +518,12 @@ export function InventarioProvider({ children }) {
             equipoConectado: row.equipo_conectado ?? null,
             nombre: row.nombre ?? null,
             notas: row.notas ?? null,
-              ip: row.ip,
+            ip: row.ip,
             bdRowId: row.id ?? null,
+            poePuerto:
+              row.poe_puerto != null && String(row.poe_puerto).trim() !== ""
+                ? String(row.poe_puerto).trim()
+                : String(p.numero),
           }
         })
         savePuertos(next)
@@ -449,8 +557,7 @@ export function InventarioProvider({ children }) {
     if (!String(comp.nombre).toLowerCase().includes("switch")) return
 
     const rack = racks.find((rk) => rk.id === comp.rackId)
-    const areaObj = rack ? areas.find((a) => a.id === rack.areaId) : null
-    const areaBd = areaObj?.codigoBd
+    const areaBd = rack ? getAreaConexionesRed(rack) : null
     const numeroSwitch = bdNumeroSwitch(comp, listaComp)
 
     if (!areaBd || numeroSwitch == null) return
@@ -459,7 +566,7 @@ export function InventarioProvider({ children }) {
       method: "POST",
       headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       body: JSON.stringify({
-        area: String(areaBd).trim().toUpperCase(),
+        area: areaBd,
         numero_switch: numeroSwitch,
         ip,
       }),
@@ -484,8 +591,7 @@ export function InventarioProvider({ children }) {
     if (!String(comp.nombre).toLowerCase().includes("switch")) return
 
     const rack = racks.find((rk) => rk.id === comp.rackId)
-    const areaObj = rack ? areas.find((a) => a.id === rack.areaId) : null
-    const areaBd = areaObj?.codigoBd
+    const areaBd = rack ? getAreaConexionesRed(rack) : null
     const numeroSwitch = bdNumeroSwitch(comp, listaComp)
 
     if (!areaBd || numeroSwitch == null) return
@@ -494,7 +600,7 @@ export function InventarioProvider({ children }) {
       method: "POST",
       headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       body: JSON.stringify({
-        area: String(areaBd).trim().toUpperCase(),
+        area: areaBd,
         numero_switch: numeroSwitch,
       }),
     })

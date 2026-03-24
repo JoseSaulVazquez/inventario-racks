@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { racks, areas } from "../data/mockData"
+import { racks, areas, getAreaConexionesRed } from "../data/mockData"
 import { findComponenteById } from "../utils/rackMerge"
 import { useInventario } from "../context/InventarioContext"
 
@@ -33,6 +33,7 @@ function PuertoView() {
     nombre: "",
     ip: "",
     notas: "",
+    poePuerto: "",
   })
 
   useEffect(() => {
@@ -48,6 +49,10 @@ function PuertoView() {
         nombre: puerto.nombre || "",
         ip: puerto.ip || "",
         notas: puerto.notas || "",
+        poePuerto:
+          puerto.poePuerto != null && puerto.poePuerto !== ""
+            ? String(puerto.poePuerto)
+            : String(puerto.numero ?? ""),
       })
     }
   }, [puerto])
@@ -62,8 +67,12 @@ function PuertoView() {
     e.preventDefault()
     if (!puerto) return
     ;(async () => {
-      const areaCodigo =
-        area?.codigoBd ? String(area.codigoBd).trim().toUpperCase() : null
+      const cn = componente?.nombre?.toLowerCase() ?? ""
+      const esSwitchSubmit = cn.includes("switch")
+      const esFibraSubmit = cn.includes("fibra") && !cn.includes("poe")
+      const esPoeSubmit = cn.includes("poe")
+
+      const areaCodigo = rack ? getAreaConexionesRed(rack) : null
       if (!areaCodigo) return
 
       const normalizePuerto = (v, esPanel = false) => {
@@ -77,19 +86,27 @@ function PuertoView() {
         return usaGuionPanel ? `P-${digits}` : `P${digits}`
       }
 
+      const poePuertoVal =
+        esPoeSubmit && form.poePuerto != null && String(form.poePuerto).trim() !== ""
+          ? String(form.poePuerto).trim()
+          : esPoeSubmit
+            ? String(puerto.numero)
+            : null
+
       const payload = {
         area: areaCodigo,
         nombre: form.nombre || null,
         estado: form.estado,
         conector: form.conector || null,
         // IP editable en el formulario: solo aplica a puertos de Switch.
-        ip: esSwitch ? form.ip || null : null,
-        numero_switch: esFibra ? null : form.numeroSwitch || null,
-        puerto_switch: esFibra ? null : normalizePuerto(form.puertoSwitch, false),
-        numero_panel: esFibra ? null : form.numeroPanel || null,
-        puerto_panel: esFibra ? null : normalizePuerto(form.puertoPanel, true),
-        equipo_conectado: esFibra ? null : form.equipoConectado || null,
+        ip: esSwitchSubmit ? form.ip || null : null,
+        numero_switch: esFibraSubmit ? null : form.numeroSwitch || null,
+        puerto_switch: esFibraSubmit ? null : normalizePuerto(form.puertoSwitch, false),
+        numero_panel: esFibraSubmit ? null : form.numeroPanel || null,
+        puerto_panel: esFibraSubmit ? null : normalizePuerto(form.puertoPanel, true),
+        equipo_conectado: esFibraSubmit ? null : form.equipoConectado || null,
         notas: form.notas || null,
+        poe_puerto: esPoeSubmit ? String(poePuertoVal) : null,
       }
 
       const res = await fetch("/api/conexiones_red/upsert", {
@@ -101,8 +118,12 @@ function PuertoView() {
         body: JSON.stringify(payload),
       }).catch(() => null)
 
+      const data = res ? await res.json().catch(() => ({})) : {}
+
       if (!res || !res.ok) {
-        setMensajeModal("Error al guardar en la base de datos")
+        setMensajeModal(
+          data?.error ? String(data.error) : "Error al guardar en la base de datos"
+        )
         setGuardado(true)
         return
       }
@@ -111,17 +132,25 @@ function PuertoView() {
       updatePuerto(puerto.id, {
         estado: form.estado,
         conector: form.conector || null,
-        numeroPanel: esFibra ? null : form.numeroPanel || null,
-        puertoPanel: esFibra ? null : normalizePuerto(form.puertoPanel, true),
-        numeroSwitch: esFibra ? null : form.numeroSwitch || null,
-        puertoSwitch: esFibra ? null : normalizePuerto(form.puertoSwitch),
-        equipoConectado: esFibra ? null : form.equipoConectado || null,
+        numeroPanel: esFibraSubmit ? null : form.numeroPanel || null,
+        puertoPanel: esFibraSubmit ? null : normalizePuerto(form.puertoPanel, true),
+        numeroSwitch: esFibraSubmit ? null : form.numeroSwitch || null,
+        puertoSwitch: esFibraSubmit ? null : normalizePuerto(form.puertoSwitch),
+        equipoConectado: esFibraSubmit ? null : form.equipoConectado || null,
         nombre: form.nombre || null,
         notas: form.notas || null,
-        ip: esSwitch ? form.ip || null : null,
+        ip: esSwitchSubmit ? form.ip || null : null,
+        poePuerto: esPoeSubmit ? String(poePuertoVal) : puerto.poePuerto,
+        bdRowId:
+          data?.id != null && Number.isFinite(Number(data.id))
+            ? Number(data.id)
+            : puerto.bdRowId,
       })
 
-      refrescarPuertosDesdeBD()
+      await refrescarPuertosDesdeBD()
+      if (data?.id != null && Number.isFinite(Number(data.id))) {
+        updatePuerto(puerto.id, { bdRowId: Number(data.id) })
+      }
       setMensajeModal("Los datos fueron guardados correctamente")
       setGuardado(true)
     })()
@@ -134,7 +163,10 @@ function PuertoView() {
   }
 
   const esSwitch = componente?.nombre.toLowerCase().includes("switch")
-  const esFibra = componente?.nombre.toLowerCase().includes("fibra")
+  const esFibra =
+    componente?.nombre.toLowerCase().includes("fibra") &&
+    !componente?.nombre.toLowerCase().includes("poe")
+  const esPoe = componente?.nombre.toLowerCase().includes("poe")
 
   const bdRowId = puerto?.bdRowId ?? null
   const tieneFilaBd = bdRowId != null
@@ -177,7 +209,14 @@ function PuertoView() {
     return usaGuionPanel ? `P-${digits}` : `P${digits}`
   }
 
-  const areaCodigo = area?.codigoBd ? String(area.codigoBd).trim().toUpperCase() : null
+  const areaCodigo = rack ? getAreaConexionesRed(rack) : null
+
+  const poePuertoParaPayload =
+    esPoe && form.poePuerto != null && String(form.poePuerto).trim() !== ""
+      ? String(form.poePuerto).trim()
+      : esPoe
+        ? String(puerto?.numero ?? "")
+        : null
 
   const construirPayload = () => ({
     area: areaCodigo,
@@ -191,6 +230,7 @@ function PuertoView() {
     puerto_panel: esFibra ? null : normalizePuerto(form.puertoPanel, true),
     equipo_conectado: esFibra ? null : form.equipoConectado || null,
     notas: form.notas || null,
+    poe_puerto: esPoe && poePuertoParaPayload != null ? String(poePuertoParaPayload) : null,
   })
 
   return (
@@ -404,6 +444,22 @@ function PuertoView() {
               </div>
             )}
 
+            {esPoe && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Puerto de POE
+                </label>
+                <input
+                  type="text"
+                  name="poePuerto"
+                  value={form.poePuerto}
+                  onChange={handleChange}
+                  placeholder="Identificador en BD (por defecto = número de puerto)"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                />
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
               <input
@@ -459,13 +515,22 @@ function PuertoView() {
                           body: JSON.stringify(payload),
                         }).catch(() => null)
 
+                        const data = res ? await res.json().catch(() => ({})) : {}
+
                         if (!res || !res.ok) {
-                          setMensajeModal("Error al actualizar en la base de datos")
+                          setMensajeModal(
+                            data?.error
+                              ? String(data.error)
+                              : "Error al actualizar en la base de datos"
+                          )
                           setGuardado(true)
                           return
                         }
 
-                        refrescarPuertosDesdeBD()
+                        await refrescarPuertosDesdeBD()
+                        if (data?.id != null && Number.isFinite(Number(data.id))) {
+                          updatePuerto(puerto.id, { bdRowId: Number(data.id) })
+                        }
                         setMensajeModal("Los datos del puerto fueron actualizados correctamente")
                         setGuardado(true)
                       })()

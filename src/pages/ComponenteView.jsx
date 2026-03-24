@@ -41,7 +41,10 @@ function ComponenteView() {
   const tieneIpEnDb =
     ipActual != null && String(ipActual).trim().length > 0
   const esSwitch = componente?.nombre.toLowerCase().includes("switch")
-  const esFibra = componente?.nombre.toLowerCase().includes("fibra")
+  const esFibra =
+    componente?.nombre.toLowerCase().includes("fibra") &&
+    !componente?.nombre.toLowerCase().includes("poe")
+  const esPoe = componente?.nombre.toLowerCase().includes("poe")
 
   const iniciarEdicionIp = () => {
     setIpLocal(ipActual ?? "")
@@ -239,6 +242,19 @@ function ComponenteView() {
                         {puertoDetalle.puertoSwitch || "—"}
                       </td>
                     </tr>
+                    {esPoe && (
+                      <tr>
+                        <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                          Puerto de POE
+                        </td>
+                        <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                          {puertoDetalle.poePuerto != null &&
+                          String(puertoDetalle.poePuerto).trim() !== ""
+                            ? String(puertoDetalle.poePuerto).trim()
+                            : String(puertoDetalle.numero ?? "—")}
+                        </td>
+                      </tr>
+                    )}
                     <tr>
                       <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
                         Equipo Conectado
