@@ -6,6 +6,7 @@ import {
   getNumeroSwitchEnRack,
   getBdNumeroPanel,
   getAreaConexionesRed,
+  nombreEsSwitchLikeBd,
 } from "../data/mockData"
 import { getMergedComponentes } from "../utils/rackMerge"
 import {
@@ -93,6 +94,8 @@ function crearPuertoBase(id, n, componenteId) {
     nombre: "",
     bdRowId: null,
     poePuerto: null,
+    numeroNvr: "",
+    nvrPuerto: "",
   }
 }
 
@@ -155,6 +158,8 @@ function limpiarPuerto(p) {
     ip: null,
     bdRowId: null,
     poePuerto: null,
+    numeroNvr: "",
+    nvrPuerto: "",
   }
 }
 
@@ -288,7 +293,7 @@ export function InventarioProvider({ children }) {
               rackIds = racks.filter((rk) => rk.areaId === areaObj.id).map((rk) => rk.id)
             }
             const switches = listaComp
-              .filter((c) => rackIds.includes(c.rackId) && String(c.nombre).toLowerCase().includes("switch"))
+              .filter((c) => rackIds.includes(c.rackId) && nombreEsSwitchLikeBd(c.nombre))
               .map((c) => ({ c, num: bdNumeroSwitch(c, listaComp) }))
               .filter((x) => x.num != null)
 
@@ -313,7 +318,7 @@ export function InventarioProvider({ children }) {
             let row = null
             if (nombreComp.includes("poe")) {
               row = findPoeRow(p, areaBdKey)
-            } else if (nombreComp.includes("switch")) {
+            } else if (nombreEsSwitchLikeBd(comp.nombre)) {
               const numSwitch = bdNumeroSwitch(comp, listaComp)
               if (numSwitch != null) {
                 row = mapSwitch.get(`${areaBdKey}::${numSwitch}::${p.numero}`) || null
@@ -349,6 +354,11 @@ export function InventarioProvider({ children }) {
                 row.poe_puerto != null && String(row.poe_puerto).trim() !== ""
                   ? String(row.poe_puerto).trim()
                   : String(p.numero),
+              numeroNvr:
+                row.numero_nvr != null && row.numero_nvr !== ""
+                  ? String(row.numero_nvr)
+                  : "",
+              nvrPuerto: row.nvr_puerto != null ? String(row.nvr_puerto) : "",
             }
           })
           savePuertos(next)
@@ -464,7 +474,7 @@ export function InventarioProvider({ children }) {
         const switches = listaComp
           .filter(
             (c) =>
-              rackIds.includes(c.rackId) && String(c.nombre).toLowerCase().includes("switch")
+              rackIds.includes(c.rackId) && nombreEsSwitchLikeBd(c.nombre)
           )
           .map((c) => ({ c, num: bdNumeroSwitch(c, listaComp) }))
           .filter((x) => x.num != null)
@@ -488,7 +498,7 @@ export function InventarioProvider({ children }) {
           let row = null
           if (nombreComp.includes("poe")) {
             row = findPoeRow(p, areaBdKey)
-          } else if (nombreComp.includes("switch")) {
+          } else if (nombreEsSwitchLikeBd(comp.nombre)) {
             const numSwitch = bdNumeroSwitch(comp, listaComp)
             if (numSwitch != null) {
               row = mapSwitch.get(`${areaBdKey}::${numSwitch}::${p.numero}`) || null
@@ -524,6 +534,11 @@ export function InventarioProvider({ children }) {
               row.poe_puerto != null && String(row.poe_puerto).trim() !== ""
                 ? String(row.poe_puerto).trim()
                 : String(p.numero),
+            numeroNvr:
+              row.numero_nvr != null && row.numero_nvr !== ""
+                ? String(row.numero_nvr)
+                : "",
+            nvrPuerto: row.nvr_puerto != null ? String(row.nvr_puerto) : "",
           }
         })
         savePuertos(next)
@@ -554,7 +569,7 @@ export function InventarioProvider({ children }) {
     const listaComp = getMergedComponentes()
     const comp = listaComp.find((c) => c.id === id)
     if (!comp) return
-    if (!String(comp.nombre).toLowerCase().includes("switch")) return
+    if (!nombreEsSwitchLikeBd(comp.nombre)) return
 
     const rack = racks.find((rk) => rk.id === comp.rackId)
     const areaBd = rack ? getAreaConexionesRed(rack) : null
@@ -588,7 +603,7 @@ export function InventarioProvider({ children }) {
     const listaComp = getMergedComponentes()
     const comp = listaComp.find((c) => c.id === id)
     if (!comp) return
-    if (!String(comp.nombre).toLowerCase().includes("switch")) return
+    if (!nombreEsSwitchLikeBd(comp.nombre)) return
 
     const rack = racks.find((rk) => rk.id === comp.rackId)
     const areaBd = rack ? getAreaConexionesRed(rack) : null

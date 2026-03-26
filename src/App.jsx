@@ -10,6 +10,7 @@ import ComponenteView from "./pages/ComponenteView"
 import PuertoView from "./pages/PuertoView"
 import Configuracion from "./pages/Configuracion"
 import Login from "./pages/Login"
+import Register from "./pages/Register"
 
 function RequireAuth({ children }) {
   const location = useLocation()
@@ -24,13 +25,15 @@ function RequireAuth({ children }) {
 
 function App() {
   const location = useLocation()
-  const isLogin = location.pathname === "/login"
+  const isAuthPage =
+    location.pathname === "/login" || location.pathname === "/register"
 
   return (
     <InventarioProvider>
-      {!isLogin && <Navbar />}
+      {!isAuthPage && <Navbar />}
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route
           path="/"
           element={

@@ -24,6 +24,43 @@ function requireAuth(req, res, next) {
   })
 }
 
+function toNull(v) {
+  if (v == null) return null
+  const s = String(v).trim()
+  return s === "" ? null : s
+}
+
+app.post("/api/auth/register", async (req, res) => {
+  try {
+    const body = req.body || {}
+    const username = toNull(body.username || body.usuario)
+    const password = toNull(body.password)
+
+    if (!username || !password) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "Usuario y contraseña son obligatorios" })
+    }
+
+    const dup = await pool.query(
+      "SELECT id FROM usuarios WHERE username = $1",
+      [username]
+    )
+    if (dup.rows.length) {
+      return res.status(409).json({ ok: false, error: "Ese usuario ya existe" })
+    }
+
+    await pool.query("INSERT INTO usuarios (username, password) VALUES ($1, $2)", [
+      username,
+      password,
+    ])
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ ok: false, error: "Error al registrar" })
+  }
+})
+
 app.post("/api/auth/login", async (req, res) => {
   try {
     const body = req.body || {}
@@ -87,15 +124,17 @@ app.get("/api/puertos", requireAuth, async (req, res) => {
       "c.nombre, " +
       "c.estado, " +
       "c.puerto_panel, " +
-      "c.numero_panel, " +
+      "c.numero_panel::text AS numero_panel, " +
       "c.conector, " +
       "c.ip AS ip, " +
       "isw.ip_switch AS ip_switch, " +
-      "c.numero_switch, " +
+      "c.numero_switch::text AS numero_switch, " +
       "c.puerto_switch, " +
       "c.equipo_conectado, " +
       "c.notas, " +
-      "c.poe_puerto " +
+      "c.poe_puerto, " +
+      "c.numero_nvr::text AS numero_nvr, " +
+      "c.nvr_puerto " +
       "FROM conexiones_red c " +
       "LEFT JOIN ips_switch isw " +
       "ON isw.area = c.area AND isw.numero_switch = c.numero_switch" +
@@ -107,15 +146,17 @@ app.get("/api/puertos", requireAuth, async (req, res) => {
       "NULL::text AS nombre, " +
       "NULL::text AS estado, " +
       "NULL::text AS puerto_panel, " +
-      "NULL::integer AS numero_panel, " +
+      "NULL::text AS numero_panel, " +
       "NULL::text AS conector, " +
       "NULL::text AS ip, " +
       "isw.ip_switch AS ip_switch, " +
-      "isw.numero_switch, " +
+      "isw.numero_switch::text AS numero_switch, " +
       "NULL::text AS puerto_switch, " +
       "NULL::text AS equipo_conectado, " +
       "NULL::text AS notas, " +
-      "NULL::text AS poe_puerto " +
+      "NULL::text AS poe_puerto, " +
+      "NULL::text AS numero_nvr, " +
+      "NULL::text AS nvr_puerto " +
       "FROM ips_switch isw " +
       "WHERE NOT EXISTS (" +
       "SELECT 1 FROM conexiones_red c2 " +
@@ -129,17 +170,6 @@ app.get("/api/puertos", requireAuth, async (req, res) => {
     res.status(500).send("Error del servidor");
   }
 });
-
-function toNull(v) {
-  if (v === undefined) return null
-  if (v === null) return null
-  if (typeof v === "string") {
-    const s = v.trim()
-    if (!s) return null
-    return s
-  }
-  return v
-}
 
 function parseNumero(v) {
   const x = toNull(v)
@@ -177,6 +207,8 @@ app.post("/api/conexiones_red/upsert", requireAuth, async (req, res) => {
     const puerto_switch = parsePuerto(body.puerto_switch)
     const numero_panel = parseNumero(body.numero_panel)
     const puerto_panel = parsePuerto(body.puerto_panel)
+    const numero_nvr = parseNumero(body.numero_nvr)
+    const nvr_puerto = parsePuerto(body.nvr_puerto)
 
     const hasSwitchKeys = area && numero_switch != null && puerto_switch != null
     const hasPanelKeys = area && numero_panel != null && puerto_panel != null
@@ -215,6 +247,8 @@ app.post("/api/conexiones_red/upsert", requireAuth, async (req, res) => {
       equipo_conectado,
       notas,
       poe_puerto,
+      numero_nvr,
+      nvr_puerto,
     ]
 
     // POE primero si viene poe_puerto (formulario POE puede incluir también panel/switch).
@@ -245,7 +279,9 @@ app.post("/api/conexiones_red/upsert", requireAuth, async (req, res) => {
         puerto_switch = $9,
         equipo_conectado = $10,
         notas = $11,
-        poe_puerto = $12
+        poe_puerto = $12,
+        numero_nvr = $13,
+        nvr_puerto = $14
       WHERE ${whereSql}
       RETURNING id
     `
@@ -266,8 +302,10 @@ app.post("/api/conexiones_red/upsert", requireAuth, async (req, res) => {
           puerto_switch = $9,
           equipo_conectado = $10,
           notas = $11,
-          poe_puerto = $12
-        WHERE id = $13
+          poe_puerto = $12,
+          numero_nvr = $13,
+          nvr_puerto = $14
+        WHERE id = $15
         RETURNING id
       `
       const updateByIdResult = await pool.query(updateByIdSql, [...values, id])
@@ -287,8 +325,9 @@ app.post("/api/conexiones_red/upsert", requireAuth, async (req, res) => {
     const insertSql = `
       INSERT INTO conexiones_red(
         area, nombre, estado, puerto_panel, numero_panel, conector, ip,
-        numero_switch, puerto_switch, equipo_conectado, notas, poe_puerto
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        numero_switch, puerto_switch, equipo_conectado, notas, poe_puerto,
+        numero_nvr, nvr_puerto
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
       RETURNING id
     `
 

@@ -19,7 +19,11 @@ const CATALOG_FAMILIAS = {
     { nombre: "Switch 24p", alturaU: 1, numPuertos: 26 },
     { nombre: "Switch Linksys 24p", alturaU: 1, numPuertos: 24 },
   ],
-  Otros: [{ nombre: "Componente POE 9p", alturaU: 1, numPuertos: 9 }],
+  Otros: [
+    { nombre: "Componente POE 9p", alturaU: 1, numPuertos: 9 },
+    { nombre: "NVR", alturaU: 1, numPuertos: 16 },
+    { nombre: "Access Point", alturaU: 1, numPuertos: 1 },
+  ],
 }
 
 const KEY_NEXT_ID = "inventario-rackDynamic-next-comp-id"

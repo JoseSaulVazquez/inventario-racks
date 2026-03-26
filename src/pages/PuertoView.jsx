@@ -1,8 +1,20 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { racks, areas, getAreaConexionesRed } from "../data/mockData"
-import { findComponenteById } from "../utils/rackMerge"
+import {
+  racks,
+  areas,
+  getAreaConexionesRed,
+  nombreEsSwitchLikeBd,
+  nombreEsNvr,
+  nombreEsAccessPoint,
+} from "../data/mockData"
+import {
+  findComponenteById,
+  getOpcionesNumeroSwitchRack,
+  getOpcionesNumeroPanelRack,
+} from "../utils/rackMerge"
 import { useInventario } from "../context/InventarioContext"
+import { buildPuertoPayload } from "../utils/puertoPayload"
 
 const ESTADOS = [
   { value: "libre", label: "Libre" },
@@ -22,6 +34,11 @@ function PuertoView() {
   const rack = componente ? racks.find((r) => r.id === componente.rackId) : null
   const area = rack ? areas.find((a) => a.id === rack.areaId) : null
 
+  const areaCodigo = useMemo(
+    () => (rack ? getAreaConexionesRed(rack) : null),
+    [rack]
+  )
+
   const [form, setForm] = useState({
     estado: "libre",
     conector: "",
@@ -34,6 +51,8 @@ function PuertoView() {
     ip: "",
     notas: "",
     poePuerto: "",
+    numeroNvr: "",
+    nvrPuerto: "",
   })
 
   useEffect(() => {
@@ -53,6 +72,11 @@ function PuertoView() {
           puerto.poePuerto != null && puerto.poePuerto !== ""
             ? String(puerto.poePuerto)
             : String(puerto.numero ?? ""),
+        numeroNvr:
+          puerto.numeroNvr != null && String(puerto.numeroNvr).trim() !== ""
+            ? String(puerto.numeroNvr)
+            : "",
+        nvrPuerto: puerto.nvrPuerto != null ? String(puerto.nvrPuerto) : "",
       })
     }
   }, [puerto])
@@ -67,13 +91,14 @@ function PuertoView() {
     e.preventDefault()
     if (!puerto) return
     ;(async () => {
+      if (!areaCodigo) return
+
       const cn = componente?.nombre?.toLowerCase() ?? ""
-      const esSwitchSubmit = cn.includes("switch")
+      const esSwitchSubmit = nombreEsSwitchLikeBd(componente?.nombre)
       const esFibraSubmit = cn.includes("fibra") && !cn.includes("poe")
       const esPoeSubmit = cn.includes("poe")
-
-      const areaCodigo = rack ? getAreaConexionesRed(rack) : null
-      if (!areaCodigo) return
+      const esNvrSubmit = nombreEsNvr(componente?.nombre)
+      const esApSubmit = nombreEsAccessPoint(componente?.nombre)
 
       const normalizePuerto = (v, esPanel = false) => {
         if (v == null) return null
@@ -81,7 +106,6 @@ function PuertoView() {
         if (!s) return null
         const digits = s.match(/(\d+)/)?.[1]
         if (!digits) return s
-        // En DORMITORIOS, BD guarda puerto_panel con formato "P-13".
         const usaGuionPanel = esPanel && areaCodigo === "DORMITORIOS"
         return usaGuionPanel ? `P-${digits}` : `P${digits}`
       }
@@ -93,21 +117,13 @@ function PuertoView() {
             ? String(puerto.numero)
             : null
 
-      const payload = {
-        area: areaCodigo,
-        nombre: form.nombre || null,
-        estado: form.estado,
-        conector: form.conector || null,
-        // IP editable en el formulario: solo aplica a puertos de Switch.
-        ip: esSwitchSubmit ? form.ip || null : null,
-        numero_switch: esFibraSubmit ? null : form.numeroSwitch || null,
-        puerto_switch: esFibraSubmit ? null : normalizePuerto(form.puertoSwitch, false),
-        numero_panel: esFibraSubmit ? null : form.numeroPanel || null,
-        puerto_panel: esFibraSubmit ? null : normalizePuerto(form.puertoPanel, true),
-        equipo_conectado: esFibraSubmit ? null : form.equipoConectado || null,
-        notas: form.notas || null,
-        poe_puerto: esPoeSubmit ? String(poePuertoVal) : null,
-      }
+      const payload = buildPuertoPayload({
+        form,
+        componente,
+        puerto,
+        areaCodigo,
+      })
+      if (!payload) return
 
       const res = await fetch("/api/conexiones_red/upsert", {
         method: "POST",
@@ -128,19 +144,21 @@ function PuertoView() {
         return
       }
 
-      // actualizar UI local
       updatePuerto(puerto.id, {
         estado: form.estado,
-        conector: form.conector || null,
-        numeroPanel: esFibraSubmit ? null : form.numeroPanel || null,
-        puertoPanel: esFibraSubmit ? null : normalizePuerto(form.puertoPanel, true),
+        conector: esApSubmit ? null : form.conector || null,
+        numeroPanel: esFibraSubmit || esApSubmit ? null : form.numeroPanel || null,
+        puertoPanel:
+          esFibraSubmit || esApSubmit ? null : normalizePuerto(form.puertoPanel, true),
         numeroSwitch: esFibraSubmit ? null : form.numeroSwitch || null,
         puertoSwitch: esFibraSubmit ? null : normalizePuerto(form.puertoSwitch),
-        equipoConectado: esFibraSubmit ? null : form.equipoConectado || null,
-        nombre: form.nombre || null,
+        equipoConectado: esFibraSubmit || esApSubmit ? null : form.equipoConectado || null,
+        nombre: esApSubmit ? null : form.nombre || null,
         notas: form.notas || null,
         ip: esSwitchSubmit ? form.ip || null : null,
         poePuerto: esPoeSubmit ? String(poePuertoVal) : puerto.poePuerto,
+        numeroNvr: esNvrSubmit ? form.numeroNvr || "" : "",
+        nvrPuerto: esNvrSubmit ? form.nvrPuerto || "" : "",
         bdRowId:
           data?.id != null && Number.isFinite(Number(data.id))
             ? Number(data.id)
@@ -162,11 +180,33 @@ function PuertoView() {
     )
   }
 
-  const esSwitch = componente?.nombre.toLowerCase().includes("switch")
+  const esSwitch = nombreEsSwitchLikeBd(componente?.nombre)
   const esFibra =
     componente?.nombre.toLowerCase().includes("fibra") &&
     !componente?.nombre.toLowerCase().includes("poe")
   const esPoe = componente?.nombre.toLowerCase().includes("poe")
+  const esNvr = nombreEsNvr(componente?.nombre)
+  const esAccessPoint = nombreEsAccessPoint(componente?.nombre)
+
+  const opcionesNumeroSwitch = useMemo(() => {
+    if (!rack) return []
+    const base = getOpcionesNumeroSwitchRack(rack.id)
+    const cur = Number(form.numeroSwitch)
+    if (Number.isFinite(cur) && cur > 0 && !base.includes(cur)) {
+      return [...base, cur].sort((a, b) => a - b)
+    }
+    return base
+  }, [rack?.id, form.numeroSwitch, puertos])
+
+  const opcionesNumeroPanel = useMemo(() => {
+    if (!rack) return []
+    const base = getOpcionesNumeroPanelRack(rack.id)
+    const cur = Number(form.numeroPanel)
+    if (Number.isFinite(cur) && cur > 0 && !base.includes(cur)) {
+      return [...base, cur].sort((a, b) => a - b)
+    }
+    return base
+  }, [rack?.id, form.numeroPanel, puertos])
 
   const bdRowId = puerto?.bdRowId ?? null
   const tieneFilaBd = bdRowId != null
@@ -195,43 +235,6 @@ function PuertoView() {
     : form.equipoConectado
       ? "Otro"
       : ""
-
-  const normalizePuerto = (v, esPanel = false) => {
-    if (v == null) return null
-    const s = String(v).trim()
-    if (!s) return null
-    const digits = s.match(/(\d+)/)?.[1]
-    if (!digits) return s
-
-    // En DORMITORIOS, BD guarda puerto_panel con formato "P-13".
-    const usaGuionPanel = esPanel && areaCodigo === "DORMITORIOS"
-
-    return usaGuionPanel ? `P-${digits}` : `P${digits}`
-  }
-
-  const areaCodigo = rack ? getAreaConexionesRed(rack) : null
-
-  const poePuertoParaPayload =
-    esPoe && form.poePuerto != null && String(form.poePuerto).trim() !== ""
-      ? String(form.poePuerto).trim()
-      : esPoe
-        ? String(puerto?.numero ?? "")
-        : null
-
-  const construirPayload = () => ({
-    area: areaCodigo,
-    nombre: form.nombre || null,
-    estado: form.estado,
-    conector: form.conector || null,
-    ip: esSwitch ? form.ip || null : null,
-    numero_switch: esFibra ? null : form.numeroSwitch || null,
-    puerto_switch: esFibra ? null : normalizePuerto(form.puertoSwitch),
-    numero_panel: esFibra ? null : form.numeroPanel || null,
-    puerto_panel: esFibra ? null : normalizePuerto(form.puertoPanel, true),
-    equipo_conectado: esFibra ? null : form.equipoConectado || null,
-    notas: form.notas || null,
-    poe_puerto: esPoe && poePuertoParaPayload != null ? String(poePuertoParaPayload) : null,
-  })
 
   return (
     <>
@@ -279,223 +282,338 @@ function PuertoView() {
             <h2 className="text-base sm:text-lg font-semibold text-[#1e3a5f]">Editar información del puerto</h2>
           </div>
           <div className="p-4 sm:p-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-              <select
-                name="estado"
-                value={form.estado}
-                onChange={handleChange}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
-              >
-                {ESTADOS.map((op) => (
-                  <option key={op.value} value={op.value}>
-                    {op.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Área</label>
-                <input
-                  type="text"
-                  value={area?.nombre || ""}
-                  disabled
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 bg-gray-100 cursor-not-allowed"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
-                <input
-                  type="text"
-                  value={puerto.numero}
-                  disabled
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 bg-gray-100 cursor-not-allowed"
-                />
-              </div>
-            </div>
-
-            <div
-              className={
-                esFibra
-                  ? "grid grid-cols-1 gap-4"
-                  : "grid grid-cols-1 sm:grid-cols-2 gap-4"
-              }
-            >
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Conector</label>
-                <input
-                  type="text"
-                  name="conector"
-                  value={form.conector}
-                  onChange={handleChange}
-                  placeholder="Ej: B-19"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
-                />
-              </div>
-              {!esFibra && (
+            {esAccessPoint ? (
+              <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Equipo conectado
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">IP</label>
+                  <input
+                    type="text"
+                    name="ip"
+                    value={form.ip}
+                    onChange={handleChange}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Número Switch
+                    </label>
+                    <select
+                      name="numeroSwitch"
+                      value={
+                        form.numeroSwitch === "" || form.numeroSwitch == null
+                          ? ""
+                          : String(form.numeroSwitch)
+                      }
+                      onChange={handleChange}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                    >
+                      <option value="">—</option>
+                      {opcionesNumeroSwitch.map((n) => (
+                        <option key={n} value={String(n)}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Puerto Switch
+                    </label>
+                    <input
+                      type="text"
+                      name="puertoSwitch"
+                      value={form.puertoSwitch}
+                      onChange={handleChange}
+                      placeholder="Ej: P5"
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+                  <textarea
+                    name="notas"
+                    value={form.notas}
+                    onChange={handleChange}
+                    rows={3}
+                    placeholder="Notas adicionales..."
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f] resize-none"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
                   <select
-                    value={equipoConectadoSelectValue}
-                    onChange={(e) => {
-                      const v = e.target.value
-                      setForm((prev) => ({
-                        ...prev,
-                        equipoConectado:
-                          v === "Otro"
-                            ? prev.equipoConectado || "Otro"
-                            : v,
-                      }))
-                      setGuardado(false)
-                    }}
+                    name="estado"
+                    value={form.estado}
+                    onChange={handleChange}
                     className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
                   >
-                    <option value="">—</option>
-                    {EQUIPO_CONECTADO_OPTIONS.filter((o) => o.value !== "Otro").map((op) => (
+                    {ESTADOS.map((op) => (
                       <option key={op.value} value={op.value}>
                         {op.label}
                       </option>
                     ))}
-                    <option value="Otro">Otro</option>
                   </select>
+                </div>
 
-                  {equipoConectadoSelectValue === "Otro" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Área</label>
                     <input
                       type="text"
-                      value={form.equipoConectado}
-                      onChange={(e) => {
-                        setForm((prev) => ({
-                          ...prev,
-                          equipoConectado: e.target.value,
-                        }))
-                        setGuardado(false)
-                      }}
-                      placeholder="Escribe la opción (ej: UPS, Telefonía IP...)"
-                      className="w-full mt-2 border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                      value={area?.nombre || ""}
+                      disabled
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 bg-gray-100 cursor-not-allowed"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
+                    <input
+                      type="text"
+                      value={puerto.numero}
+                      disabled
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 bg-gray-100 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                <div
+                  className={
+                    esFibra
+                      ? "grid grid-cols-1 gap-4"
+                      : "grid grid-cols-1 sm:grid-cols-2 gap-4"
+                  }
+                >
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Conector</label>
+                    <input
+                      type="text"
+                      name="conector"
+                      value={form.conector}
+                      onChange={handleChange}
+                      placeholder="Ej: B-19"
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                    />
+                  </div>
+                  {!esFibra && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Equipo conectado
+                      </label>
+                      <select
+                        value={equipoConectadoSelectValue}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          setForm((prev) => ({
+                            ...prev,
+                            equipoConectado:
+                              v === "Otro"
+                                ? prev.equipoConectado || "Otro"
+                                : v,
+                          }))
+                          setGuardado(false)
+                        }}
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                      >
+                        <option value="">—</option>
+                        {EQUIPO_CONECTADO_OPTIONS.filter((o) => o.value !== "Otro").map((op) => (
+                          <option key={op.value} value={op.value}>
+                            {op.label}
+                          </option>
+                        ))}
+                        <option value="Otro">Otro</option>
+                      </select>
+
+                      {equipoConectadoSelectValue === "Otro" && (
+                        <input
+                          type="text"
+                          value={form.equipoConectado}
+                          onChange={(e) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              equipoConectado: e.target.value,
+                            }))
+                            setGuardado(false)
+                          }}
+                          placeholder="Escribe la opción (ej: UPS, Telefonía IP...)"
+                          className="w-full mt-2 border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                        />
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            {!esFibra && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {!esFibra && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Número Panel
+                      </label>
+                      <select
+                        name="numeroPanel"
+                        value={
+                          form.numeroPanel === "" || form.numeroPanel == null
+                            ? ""
+                            : String(form.numeroPanel)
+                        }
+                        onChange={handleChange}
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                      >
+                        <option value="">—</option>
+                        {opcionesNumeroPanel.map((n) => (
+                          <option key={n} value={String(n)}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Puerto Panel
+                      </label>
+                      <input
+                        type="text"
+                        name="puertoPanel"
+                        value={form.puertoPanel}
+                        onChange={handleChange}
+                        placeholder="Ej: 2"
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {!esFibra && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Número Switch
+                      </label>
+                      <select
+                        name="numeroSwitch"
+                        value={
+                          form.numeroSwitch === "" || form.numeroSwitch == null
+                            ? ""
+                            : String(form.numeroSwitch)
+                        }
+                        onChange={handleChange}
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                      >
+                        <option value="">—</option>
+                        {opcionesNumeroSwitch.map((n) => (
+                          <option key={n} value={String(n)}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Puerto Switch
+                      </label>
+                      <input
+                        type="text"
+                        name="puertoSwitch"
+                        value={form.puertoSwitch}
+                        onChange={handleChange}
+                        placeholder="Ej: 5"
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {esNvr && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Número NVR
+                      </label>
+                      <input
+                        type="text"
+                        name="numeroNvr"
+                        inputMode="numeric"
+                        value={form.numeroNvr}
+                        onChange={handleChange}
+                        placeholder="Ej: 1"
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Puerto NVR
+                      </label>
+                      <input
+                        type="text"
+                        name="nvrPuerto"
+                        value={form.nvrPuerto}
+                        onChange={handleChange}
+                        placeholder="Ej: P3"
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {esPoe && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Puerto de POE
+                    </label>
+                    <input
+                      type="text"
+                      name="poePuerto"
+                      value={form.poePuerto}
+                      onChange={handleChange}
+                      placeholder="Identificador en BD (por defecto = número de puerto)"
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                    />
+                  </div>
+                )}
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Número Panel
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
                   <input
                     type="text"
-                    name="numeroPanel"
-                    value={form.numeroPanel}
+                    name="nombre"
+                    value={form.nombre}
                     onChange={handleChange}
-                    placeholder="Ej: 1"
+                    placeholder="Ej: Oficina Administración"
                     className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
                   />
                 </div>
+
+                {esSwitch && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">IP</label>
+                    <input
+                      type="text"
+                      name="ip"
+                      value={form.ip}
+                      onChange={handleChange}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900"
+                    />
+                  </div>
+                )}
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Puerto Panel
-                  </label>
-                  <input
-                    type="text"
-                    name="puertoPanel"
-                    value={form.puertoPanel}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+                  <textarea
+                    name="notas"
+                    value={form.notas}
                     onChange={handleChange}
-                    placeholder="Ej: 2"
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
+                    rows={3}
+                    placeholder="Notas adicionales..."
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f] resize-none"
                   />
                 </div>
-              </div>
+              </>
             )}
-
-            {!esFibra && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Número Switch
-                  </label>
-                  <input
-                    type="text"
-                    name="numeroSwitch"
-                    value={form.numeroSwitch}
-                    onChange={handleChange}
-                    placeholder="Ej: 1"
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Puerto Switch
-                  </label>
-                  <input
-                    type="text"
-                    name="puertoSwitch"
-                    value={form.puertoSwitch}
-                    onChange={handleChange}
-                    placeholder="Ej: 5"
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
-                  />
-                </div>
-              </div>
-            )}
-
-            {esPoe && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Puerto de POE
-                </label>
-                <input
-                  type="text"
-                  name="poePuerto"
-                  value={form.poePuerto}
-                  onChange={handleChange}
-                  placeholder="Identificador en BD (por defecto = número de puerto)"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
-              <input
-                type="text"
-                name="nombre"
-                value={form.nombre}
-                onChange={handleChange}
-                placeholder="Ej: Oficina Administración"
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f]"
-              />
-            </div>
-
-            {esSwitch && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">IP</label>
-                <input
-                  type="text"
-                  name="ip"
-                  value={form.ip}
-                  onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900"
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
-              <textarea
-                name="notas"
-                value={form.notas}
-                onChange={handleChange}
-                rows={3}
-                placeholder="Notas adicionales..."
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#1e3a5f] focus:border-[#1e3a5f] resize-none"
-              />
-            </div>
 
             <div className="pt-2 flex flex-wrap gap-2">
               {tieneFilaBd ? (
@@ -505,7 +623,15 @@ function PuertoView() {
                     onClick={() => {
                       if (!puerto || bdRowId == null) return
                       ;(async () => {
-                        const payload = { ...construirPayload(), id: bdRowId }
+                        const base = buildPuertoPayload({
+                          form,
+                          componente,
+                          puerto,
+                          areaCodigo,
+                        })
+                        const payload =
+                          base != null ? { ...base, id: bdRowId } : null
+                        if (!payload) return
                         const res = await fetch("/api/conexiones_red/upsert", {
                           method: "POST",
                         headers: {

@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { racks, areas, getPuertosByComponenteId } from "../data/mockData"
+import {
+  racks,
+  areas,
+  getPuertosByComponenteId,
+  nombreEsSwitchLikeBd,
+  nombreEsNvr,
+  nombreEsAccessPoint,
+} from "../data/mockData"
 import { findComponenteById } from "../utils/rackMerge"
 import { useInventario } from "../context/InventarioContext"
 
@@ -47,11 +54,13 @@ function ComponenteView() {
   const ipActual = componente ? getIpComponente(componente.id) : null
   const tieneIpEnDb =
     ipActual != null && String(ipActual).trim().length > 0
-  const esSwitch = componente?.nombre.toLowerCase().includes("switch")
+  const esSwitch = nombreEsSwitchLikeBd(componente?.nombre)
   const esFibra =
     componente?.nombre.toLowerCase().includes("fibra") &&
     !componente?.nombre.toLowerCase().includes("poe")
   const esPoe = componente?.nombre.toLowerCase().includes("poe")
+  const esNvr = nombreEsNvr(componente?.nombre)
+  const esAccessPoint = nombreEsAccessPoint(componente?.nombre)
 
   const iniciarEdicionIp = () => {
     setIpLocal(ipActual ?? "")
@@ -234,40 +243,12 @@ function ComponenteView() {
           {puertoDetalle ? (
             <table className="w-full text-left text-sm">
               <tbody>
-                <tr>
-                  <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium w-40">Área</td>
-                  <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                    {area?.nombre || "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Conector</td>
-                  <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                    {puertoDetalle.conector || puertoDetalle.conexionDestino || "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Número</td>
-                  <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                    {puertoDetalle.numero}
-                  </td>
-                </tr>
-                {!esFibra && (
+                {esAccessPoint ? (
                   <>
                     <tr>
-                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
-                        Número Panel
-                      </td>
+                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium w-40">IP</td>
                       <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                        {puertoDetalle.numeroPanel || "—"}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
-                        Puerto Panel
-                      </td>
-                      <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                        {puertoDetalle.puertoPanel || "—"}
+                        {puertoDetalle.ip || "—"}
                       </td>
                     </tr>
                     <tr>
@@ -286,49 +267,138 @@ function ComponenteView() {
                         {puertoDetalle.puertoSwitch || "—"}
                       </td>
                     </tr>
-                    {esPoe && (
+                    <tr>
+                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Notas</td>
+                      <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                        {puertoDetalle.notas || "—"}
+                      </td>
+                    </tr>
+                  </>
+                ) : (
+                  <>
+                    <tr>
+                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium w-40">Área</td>
+                      <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                        {area?.nombre || "—"}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Conector</td>
+                      <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                        {puertoDetalle.conector || puertoDetalle.conexionDestino || "—"}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Número</td>
+                      <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                        {puertoDetalle.numero}
+                      </td>
+                    </tr>
+                    {!esFibra && (
+                      <>
+                        <tr>
+                          <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                            Número Panel
+                          </td>
+                          <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                            {puertoDetalle.numeroPanel || "—"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                            Puerto Panel
+                          </td>
+                          <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                            {puertoDetalle.puertoPanel || "—"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                            Número Switch
+                          </td>
+                          <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                            {puertoDetalle.numeroSwitch || "—"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                            Puerto Switch
+                          </td>
+                          <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                            {puertoDetalle.puertoSwitch || "—"}
+                          </td>
+                        </tr>
+                        {esNvr && (
+                          <>
+                            <tr>
+                              <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                                Número NVR
+                              </td>
+                              <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                                {puertoDetalle.numeroNvr != null &&
+                                String(puertoDetalle.numeroNvr).trim() !== ""
+                                  ? String(puertoDetalle.numeroNvr)
+                                  : "—"}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                                Puerto NVR
+                              </td>
+                              <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                                {puertoDetalle.nvrPuerto != null &&
+                                String(puertoDetalle.nvrPuerto).trim() !== ""
+                                  ? String(puertoDetalle.nvrPuerto)
+                                  : "—"}
+                              </td>
+                            </tr>
+                          </>
+                        )}
+                        {esPoe && (
+                          <tr>
+                            <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                              Puerto de POE
+                            </td>
+                            <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                              {puertoDetalle.poePuerto != null &&
+                              String(puertoDetalle.poePuerto).trim() !== ""
+                                ? String(puertoDetalle.poePuerto).trim()
+                                : String(puertoDetalle.numero ?? "—")}
+                            </td>
+                          </tr>
+                        )}
+                        <tr>
+                          <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
+                            Equipo Conectado
+                          </td>
+                          <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                            {puertoDetalle.equipoConectado || "—"}
+                          </td>
+                        </tr>
+                      </>
+                    )}
+                    <tr>
+                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Nombre</td>
+                      <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
+                        {puertoDetalle.nombre || "—"}
+                      </td>
+                    </tr>
+                    {esSwitch && (
                       <tr>
-                        <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
-                          Puerto de POE
-                        </td>
+                        <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">IP</td>
                         <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                          {puertoDetalle.poePuerto != null &&
-                          String(puertoDetalle.poePuerto).trim() !== ""
-                            ? String(puertoDetalle.poePuerto).trim()
-                            : String(puertoDetalle.numero ?? "—")}
+                          {puertoDetalle.ip || "—"}
                         </td>
                       </tr>
                     )}
                     <tr>
-                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">
-                        Equipo Conectado
-                      </td>
+                      <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Notas</td>
                       <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                        {puertoDetalle.equipoConectado || "—"}
+                        {puertoDetalle.notas || "-"}
                       </td>
                     </tr>
                   </>
                 )}
-                <tr>
-                  <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Nombre</td>
-                  <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                    {puertoDetalle.nombre || "—"}
-                  </td>
-                </tr>
-                {esSwitch && (
-                  <tr>
-                    <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">IP</td>
-                    <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                      {puertoDetalle.ip || "—"}
-                    </td>
-                  </tr>
-                )}
-                <tr>
-                  <td className="bg-[#1e3a5f] text-white px-4 py-3 font-medium">Notas</td>
-                  <td className="bg-white text-gray-900 px-4 py-3 border-l border-gray-200">
-                    {puertoDetalle.notas || "-"}
-                  </td>
-                </tr>
               </tbody>
             </table>
           ) : (
@@ -339,7 +409,7 @@ function ComponenteView() {
         </div>
 
         <div className="flex flex-col items-stretch sm:items-start gap-2 w-full sm:w-auto">
-          {componente.nombre.toLowerCase().includes("switch") && (
+          {nombreEsSwitchLikeBd(componente.nombre) && !esAccessPoint && (
             <div className="flex items-center gap-2 flex-wrap">
               {editandoIp ? (
                 <>

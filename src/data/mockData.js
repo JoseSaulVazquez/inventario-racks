@@ -30,6 +30,24 @@ export const areas = [
   { id: 9, nombre: "Mantenimiento", codigoBd: "Mantenimiento" },
 ]
 
+/** Switch, NVR y Access Point comparten numeración `numero_switch` en conexiones_red (orden en el rack). */
+export function nombreEsSwitchLikeBd(nombre) {
+  const n = String(nombre || "").toLowerCase()
+  if (n.includes("switch")) return true
+  if (n.includes("nvr")) return true
+  if (n.includes("access") && n.includes("point")) return true
+  return false
+}
+
+export function nombreEsNvr(nombre) {
+  return String(nombre || "").toLowerCase().includes("nvr")
+}
+
+export function nombreEsAccessPoint(nombre) {
+  const n = String(nombre || "").toLowerCase()
+  return n.includes("access") && n.includes("point")
+}
+
 // Ubicaciones que van directo a un rack (solo 1 rack en esa área)
 // Casetas: lista en /casetas (Caseta 1 y 2), no ir directo a un rack.
 export const ubicacionToRackId = {
@@ -52,8 +70,20 @@ export const racks = [
   { id: 4, nombre: "Rack Oficinas P2", totalU: 42, areaId: 3 },
   { id: 5, nombre: "Rack Oficinas P2-B", totalU: 24, areaId: 3 },
   { id: 6, nombre: "Rack Oficinas P3", totalU: 42, areaId: 4 },
-  { id: 7, nombre: "Rack Caseta 1", totalU: 20, areaId: 5 },
-  { id: 17, nombre: "Rack Caseta 2", totalU: 42, areaId: 5 },
+  {
+    id: 7,
+    nombre: "Rack Caseta 1",
+    totalU: 20,
+    areaId: 5,
+    areaConexionesRed: "Caseta",
+  },
+  {
+    id: 17,
+    nombre: "Rack Caseta 2",
+    totalU: 42,
+    areaId: 5,
+    areaConexionesRed: "Caseta 2",
+  },
   { id: 8, nombre: "Rack Comedor", totalU: 20, areaId: 6 },
   { id: 9, nombre: "Rack Dormitorios", totalU: 20, areaId: 7 },
   {
@@ -196,6 +226,12 @@ export const componentes = [
   { id: 89, nombre: "Fibra", rackId: 16, posicionInicio: 20, alturaU: 1, numPuertos: 14 },
   { id: 90, nombre: "Patch Panel 24p", rackId: 16, posicionInicio: 19, alturaU: 1, numPuertos: 24 },
   { id: 91, nombre: "Switch 16p", rackId: 16, posicionInicio: 18, alturaU: 1, numPuertos: 18 },
+  // Rack 17 - Caseta 2 (42U): orden de arriba hacia abajo
+  { id: 102, nombre: "Fibra", rackId: 17, posicionInicio: 42, alturaU: 1, numPuertos: 14 },
+  { id: 103, nombre: "Patch Panel 24p", rackId: 17, posicionInicio: 41, alturaU: 1, numPuertos: 24 },
+  { id: 104, nombre: "NVR", rackId: 17, posicionInicio: 40, alturaU: 1, numPuertos: 16 },
+  { id: 105, nombre: "Switch 16p", rackId: 17, posicionInicio: 39, alturaU: 1, numPuertos: 18 },
+  { id: 106, nombre: "Access Point", rackId: 17, posicionInicio: 38, alturaU: 1, numPuertos: 1 },
 ]
 
 // Generar puertos para un componente (usa numPuertos del componente)
@@ -221,6 +257,8 @@ function generarPuertos(componenteId, cantidad) {
       ip: null,
       bdRowId: null,
       poePuerto: null,
+      numeroNvr: "",
+      nvrPuerto: "",
     })
   }
   return lista
@@ -274,13 +312,13 @@ export function getNumeroSwitchEnRack(componenteId, listaComponentes = component
   const list = listaComponentes
   const comp = list.find((c) => c.id === Number(componenteId))
   if (!comp) return null
-  if (!String(comp.nombre).toLowerCase().includes("switch")) return null
+  if (!nombreEsSwitchLikeBd(comp.nombre)) return null
 
   const switchesDelRack = list
     .filter(
       (c) =>
         c.rackId === comp.rackId &&
-        String(c.nombre).toLowerCase().includes("switch")
+        nombreEsSwitchLikeBd(c.nombre)
     )
     .sort((a, b) => b.posicionInicio - a.posicionInicio)
 
@@ -328,7 +366,7 @@ export function getNumeroSwitchEnArea(componenteId, listaComponentes = component
   const list = listaComponentes
   const comp = list.find((c) => c.id === Number(componenteId))
   if (!comp) return null
-  if (!String(comp.nombre).toLowerCase().includes("switch")) return null
+  if (!nombreEsSwitchLikeBd(comp.nombre)) return null
   const rack = racks.find((r) => r.id === comp.rackId)
   if (!rack) return null
   const areaId = rack.areaId
@@ -341,7 +379,7 @@ export function getNumeroSwitchEnArea(componenteId, listaComponentes = component
     const chunk = list
       .filter(
         (c) =>
-          c.rackId === rid && String(c.nombre).toLowerCase().includes("switch")
+          c.rackId === rid && nombreEsSwitchLikeBd(c.nombre)
       )
       .sort((a, b) => b.posicionInicio - a.posicionInicio)
     switches.push(...chunk)
